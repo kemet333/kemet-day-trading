@@ -1,4 +1,6 @@
-"""kemet-alertas: reglas que suenan una vez, el reloj de Globex y el precio sobre el fixture real de NQ, sin red."""
+"""kemet-alertas: reglas que suenan una vez, el reloj de Globex y el precio sobre el fixture real de NQ, sin red.
+Acciones: el reloj de la NYSE (festivo 26/11, recortado 27/11), el campanazo de apertura una vez por día, quote TSLA y el plan de
+TSLA del 11/11 (stop 389,51, objetivo 396,65) sobre el fixture real TSLA-60d-5m.json.gz."""
 import contextlib
 import datetime as dt
 import io
@@ -189,7 +191,7 @@ class Alertas(unittest.TestCase):
         code, out, err = correr(["add", "--simbolo", "MNQ", "--encima", "28500", "--fecha", "2026-11-11"])
         self.assertEqual(code, 0, err)
         self.assertIn("nq-encima-28500", out)
-        code, out, err = correr(["add", "--simbolo", "XX", "--debajo", "1"])
+        code, out, err = correr(["add", "--simbolo", "X1", "--debajo", "1"])     # ni futuro ni ticker (un ticker no lleva cifras)
         self.assertEqual(code, 2)
         code, out, err = correr(["add", "--a", "25:00"])
         self.assertEqual(code, 2)
@@ -198,6 +200,82 @@ class Alertas(unittest.TestCase):
         code, out, _ = correr(["list"])
         self.assertEqual(code, 0)
         self.assertIn("nq-encima-28500", out)
+
+
+    # ---- acciones: el reloj de la NYSE, el campanazo de apertura, el precio y el plan
+
+    def test_reloj_de_la_nyse(self):
+        st = alertas.estado(ny("2026-11-11 10:00"), "TSLA")
+        self.assertEqual((st["reloj"], st["estado"], st["nyse"], st["instrumento"], st["regular"], st["regular_abre"], st["regular_cierra"]),
+                         ("nyse", "abierto", "abierto", "accion", True, "09:30", "16:00"))
+        self.assertNotIn("globex", st)
+        st = alertas.estado(ny("2026-11-11 16:30"), "TSLA")
+        self.assertEqual((st["estado"], st["proxima_apertura"]), ("cerrado", "12/11/2026 09:30"))
+        st = alertas.estado(ny("2026-11-26 11:00"), "TSLA")                                   # Thanksgiving: la NYSE cierra
+        self.assertEqual((st["estado"], st["motivo"], st["proxima_apertura"]), ("cerrado", "Thanksgiving", "27/11/2026 09:30"))
+        st = alertas.estado(ny("2026-11-27 11:00"), "TSLA")                                   # el día después, recortado a las 13:00
+        self.assertEqual((st["estado"], st["regular_cierra"], st["recortada"], st["cierra_hoy"]), ("abierto", "13:00", "Día después de Thanksgiving", "13:00"))
+        st = alertas.estado(ny("2026-11-27 13:30"), "TSLA")
+        self.assertEqual((st["estado"], st["motivo"], st["proxima_apertura"]), ("cerrado", "después del cierre (13:00 NY)", "30/11/2026 09:30"))
+        self.assertEqual(alertas.estado(ny("2026-11-14 12:00"), "TSLA")["estado"], "cerrado")
+        self.assertEqual(alertas.estado(ny("2026-11-26 11:00"), "NQ")["globex"], "abierto")      # Globex sí abre ese día
+        code, out, _ = correr(["reloj", "--mercado", "TSLA", "--ahora", "2026-11-27 11:00"])
+        self.assertEqual(code, 0)
+        self.assertIn("Reloj de la NYSE: 17:00 Madrid / 11:00 NY, viernes 27/11/2026. NYSE ABIERTA (sesión recortada: Día después de Thanksgiving).", out)
+        self.assertIn("Sesión regular de TSLA: 09:30 a 13:00 NY, en sesión regular (recortada: Día después de Thanksgiving).", out)
+        self.assertIn("La NYSE cierra hoy a las 13:00 NY.", out)
+        code, out, _ = correr(["reloj", "--simbolo", "TSLA", "--ahora", "2026-11-26 11:00"])
+        self.assertEqual(code, 1)
+        self.assertIn("NYSE CERRADA (Thanksgiving)", out)
+        self.assertIn("Próxima apertura de la NYSE: 27/11/2026 09:30 NY.", out)
+
+    def test_apertura_de_una_accion_suena_una_vez_por_dia(self):
+        code, out, err = correr(["add", "--simbolo", "TSLA", "--apertura"])
+        self.assertEqual(code, 0, err)
+        self.assertIn("apertura-tsla", out)
+        self.assertEqual(correr(["add", "--simbolo", "TSLA", "--hora-limite"])[0], 2)       # una acción no tiene hora límite de firma
+        code, out, err = correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-11 09:29", "--offline", YAHOO])
+        self.assertEqual(code, 1, err)
+        self.assertIn("NYSE cerrada", out)
+        code, out, err = correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-11 09:35", "--offline", YAHOO, "--json"])
+        self.assertEqual(code, 0, err)
+        sonaron = json.loads(out)["sonaron"]
+        self.assertEqual([t["id"] for t in sonaron], ["apertura-tsla"])
+        self.assertIn("Campanazo de apertura de la NYSE para TSLA: 09:30 NY (15:30 Madrid).", sonaron[0]["mensaje"])
+        self.assertEqual(correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-11 09:40", "--offline", YAHOO])[0], 1)     # una vez
+        self.assertEqual(correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-11 15:00", "--offline", YAHOO])[0], 1)
+        code, out, _ = correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-12 09:35", "--offline", YAHOO, "--json"])
+        self.assertEqual([t["id"] for t in json.loads(out)["sonaron"]], ["apertura-tsla"])       # al día siguiente, otra vez
+        self.assertEqual(correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-26 10:00", "--offline", YAHOO])[0], 1)   # festivo: no suena
+        code, out, _ = correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-27 09:35", "--offline", YAHOO, "--json"])
+        self.assertIn("Sesión recortada (Día después de Thanksgiving): cierra a las 13:00 NY.", json.loads(out)["sonaron"][0]["mensaje"])
+
+    def test_quote_y_plan_de_una_accion(self):
+        code, out, err = correr(["quote", "TSLA", "--escribir", "--ahora", "2026-11-11 10:00", "--offline", YAHOO])
+        self.assertEqual(code, 0, err)
+        self.assertIn("TSLA último 389,81 (vela de 5 m de las 09:55, cerrada a las 10:00, retraso 0 min), +2,64 % sobre el cierre regular del 10/11/2026 (379,80).", out)
+        self.assertIn("puede ir con retraso", out)
+        with open(comun.ruta("precios.json"), encoding="utf-8") as fh:
+            q = json.load(fh)["precios"]["TSLA"]
+        self.assertEqual((q["precio"], q["cierre_anterior"], q["hora_vela"]), (389.81, 379.8, "2026-11-11 09:55"))
+        tarde = alertas.precio_ultimo("TSLA", ny("2026-11-11 16:30"), YAHOO)
+        self.assertEqual((tarde["precio"], tarde["fecha_cierre_anterior"], tarde["cierre_anterior"], tarde["retraso_min"]), (390.8, "2026-11-11", 390.8, 30))
+        self.escribir("plan.json", {"mercado": "TSLA", "instrumento": "accion", "fecha": "2026-11-11", "lado": "largo", "entrada": 393.08,
+                                    "hora_entrada": "10:15", "barra": 9, "stop": 389.51, "regla_stop": "ib-medio", "objetivo": 396.65,
+                                    "regla_objetivo": "R:1", "plano_a": "15:55"})
+        code, out, err = correr(["add", "--desde-plan"])
+        self.assertEqual(code, 0, err)
+        with open(comun.ruta("alertas.json"), encoding="utf-8") as fh:
+            self.assertEqual([r["id"] for r in json.load(fh)["reglas"]], ["tsla-plan-stop", "tsla-plan-objetivo", "tsla-plano-a"])
+        code, out, err = correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-11 11:00", "--offline", YAHOO])     # 395,12: ni stop ni objetivo
+        self.assertEqual(code, 1, err)
+        self.assertIn("NYSE abierta (17:00 Madrid / 11:00 NY, sesión regular).", out)
+        self.assertIn("TSLA 395,12", out)
+        code, out, err = correr(["check", "--mercado", "TSLA", "--ahora", "2026-11-11 15:55", "--offline", YAHOO, "--json"])
+        sonaron = json.loads(out)["sonaron"]
+        self.assertEqual([t["id"] for t in sonaron], ["tsla-plan-stop", "tsla-plano-a"])
+        self.assertIn("388,93", sonaron[0]["mensaje"])
+        self.assertIn("por debajo de tu stop 389,51", sonaron[0]["mensaje"])
 
 
 if __name__ == "__main__":

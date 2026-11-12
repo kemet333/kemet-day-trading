@@ -1,20 +1,23 @@
 ---
 name: kemet-niveles
 description: >-
-  Niveles de sesión de futuros (ES, NQ, CL, GC) con velas de 5 minutos gratis de
-  Yahoo, sin clave. Calcula lo que un trader intradía marca antes de abrir y no
+  Niveles de sesión de futuros (ES, NQ, CL, GC) y de acciones de EE. UU. (TSLA,
+  cualquier ticker) con velas de 5 minutos gratis de Yahoo, sin clave. Calcula
+  lo que un trader intradía marca antes de abrir y no
   tendría que teclear: máximo, mínimo y cierre de la sesión regular anterior
   (PDH, PDL, PDC), rango nocturno desde las 18:00 de Nueva York (ONH, ONL),
   apertura de 15 minutos (ORH, ORL), balance inicial de la primera hora (IBH,
   IBL, solo cuando ya cerró), máximo y mínimo de hoy, el rango medio de las
   últimas 20 sesiones regulares (contexto para el stop) y dónde está el último
-  precio respecto a cada nivel. Escribe kemet/niveles.json para kemet-plan y
+  precio respecto a cada nivel. En una acción no hay noche: máximo, mínimo y
+  cierre de ayer, apertura y balance inicial de 15 minutos, hoy y el rango
+  medio, al céntimo. Escribe kemet/niveles.json para kemet-plan y
   kemet-entrada. Niveles, no señales: sin dirección ni objetivos. Úsala cuando
   el usuario diga "qué niveles marco", "dame el máximo y el mínimo de ayer",
   "dónde cerró el NQ", "rango nocturno", "cuál es el balance inicial", "dónde
-  está el precio respecto a ayer", "niveles del ES y del crudo", o al empezar
-  el día antes de kemet-plan.
-argument-hint: "[--mercado ES|NQ|CL|GC] [--todos] [--escribir] [--ahora \"AAAA-MM-DD HH:MM\"]"
+  está el precio respecto a ayer", "niveles del ES y del crudo", "niveles de
+  TSLA", o al empezar el día antes de kemet-plan.
+argument-hint: "[--mercado ES|NQ|CL|GC|TSLA] [--ib-minutos 60|15] [--todos] [--escribir] [--ahora \"AAAA-MM-DD HH:MM\"]"
 ---
 
 # kemet-niveles
@@ -33,9 +36,11 @@ python3 "${CLAUDE_SKILL_DIR}/niveles.py" --mercado ES --escribir      # ES y gua
 python3 "${CLAUDE_SKILL_DIR}/niveles.py" --todos                      # ES, NQ, CL y GC seguidos
 python3 "${CLAUDE_SKILL_DIR}/niveles.py" --json                       # el documento completo
 python3 "${CLAUDE_SKILL_DIR}/niveles.py" --ahora "2026-11-11 16:30" --offline tests/fixtures/yahoo   # repetir un día
+python3 "${CLAUDE_SKILL_DIR}/niveles.py" --mercado TSLA                # una acción: sin noche, apertura y balance inicial de 15 minutos
 ```
 
-Flags: `--mercado` (ES, NQ, CL o GC), `--todos`, `--escribir`, `--json`, `--ahora "AAAA-MM-DD HH:MM"` en hora de
+Flags: `--mercado` o `--simbolo` (un futuro: ES, NQ, CL, GC, o un ticker de acciones de EE. UU.: TSLA), `--ib-minutos
+15|30|60` (60 en futuros, 15 en acciones), `--todos`, `--escribir`, `--json`, `--ahora "AAAA-MM-DD HH:MM"` en hora de
 Nueva York para fijar el reloj, `--offline RUTA` para leer un JSON de Yahoo guardado (`.json` o `.json.gz`, o la
 carpeta `tests/fixtures/yahoo`). `KEMET_DIR` cambia la carpeta `kemet/`. Código de salida 0 si hay niveles, 1 si no
 hay sesión anterior en los datos, 2 si hay un error (una línea, sin traza).
@@ -46,7 +51,7 @@ hay sesión anterior en los datos, 2 si hay un error (una línea, sin traza).
 | --- | --- |
 | `kemet/config.json` | opcional: `mercado` por defecto. Sin él, NQ |
 | Yahoo, gráfico v8 | `range=60d&interval=5m` del contrato continuo (`NQ=F`), una petición por contrato: gratis, sin clave, unos 10 minutos de retraso; 60 días porque el rango medio usa 20 sesiones |
-| `kemet/niveles.json` | con `--escribir`: `generado`, `mercado`, `fecha`, `sesion` (rth, nocturna, cerrado), `ultimo`, `pdh`, `pdl`, `pdc`, `onh`, `onl`, `orh`, `orl`, `ibh`, `ibl`, `tdh`, `tdl`, `rango_medio_20`, `posicion`. Las claves que aún no existen no aparecen |
+| `kemet/niveles.json` | con `--escribir`: `generado`, `mercado`, `instrumento` (futuro o accion), `fecha`, `sesion` (rth, nocturna, cerrado), `ultimo`, `pdh`, `pdl`, `pdc`, `onh`, `onl`, `orh`, `orl`, `ibh`, `ibl`, `ib_minutos`, `tdh`, `tdl`, `rango_medio_20`, `posicion`. Las claves que aún no existen no aparecen; en una acción `onh` y `onl` no existen nunca |
 | `kemet/niveles-ES.json` (y CL, GC) | con `--todos --escribir`: los demás contratos, uno por archivo; `niveles.json` es el del mercado principal |
 
 kemet-plan lee `niveles.json` si es de hoy y de su mercado; kemet-entrada usa el mismo balance inicial.
@@ -73,6 +78,11 @@ kemet-plan lee `niveles.json` si es de hoy y de su mercado; kemet-entrada usa el
   filtro ni decide si se opera.
 - **Último**: el cierre de la última vela cerrada, no la cinta. Con el retraso de Yahoo, el último precio que ves tiene
   unos 10 minutos.
+- **Acciones de EE. UU.** (`--mercado TSLA`): el día es la fecha de Nueva York y no hay sesión nocturna, así que no
+  hay ONH ni ONL y no se inventan con el premercado. Sesión regular de 09:30 a 16:00 (13:00 en los días recortados de
+  la NYSE). Apertura y balance inicial son los dos de 15 minutos por defecto, así que coinciden; `--ib-minutos 30`
+  o `60` separa el IB. Niveles al céntimo, rango medio en dólares por acción. Fin de semana y festivos de la NYSE:
+  mercado cerrado.
 - **Posición**: por encima, por debajo o justo en cada nivel, comparando el último con el nivel.
 - Solo velas cerradas (inicio más 5 minutos antes del reloj). Una vela fuera de la rejilla de 5 minutos (el tick en
   vivo de Yahoo) se descarta.
@@ -119,7 +129,7 @@ NQ · mié 2026-11-11 · 09:00 Madrid / 03:00 NY · velas de 5 min de Yahoo (gra
 Último 28.240,25 (cierre de la vela de las 03:00 NY)
   Ayer (sesión regular 2026-11-10)   máximo 28.090   mínimo 27.516   cierre 27.835,25
   Noche (desde 18:00 NY)             máximo 28.280   mínimo 27.847,75
-  Apertura 15 min                    a las 09:30 NY
+  Apertura 15 min                    a las 09:45 NY
   Balance inicial 1 h                a las 10:30 NY
   Hoy (sesión regular)               sin sesión regular todavía
   Rango medio de sesión              514,15 puntos (media de máximo menos mínimo de las últimas 20 sesiones, para dimensionar el stop)
@@ -131,11 +141,37 @@ salen también ES (balance inicial 7.593,25 a 7.624,75, rango medio 78,76), CL (
 y GC (4.035,30 a 4.052,90, pit de 08:20 a 13:30); en CL y GC el rango medio sale sobre las 2 sesiones que tiene el
 fixture, y lo dice.
 
+## Ejemplo: TSLA, miércoles 11 de noviembre de 2026
+
+Una acción, con el fixture real `TSLA-60d-5m.json.gz` (60 sesiones), a las 16:30 de Nueva York:
+
+```
+python3 niveles.py --mercado TSLA --ahora "2026-11-11 16:30" --offline tests/fixtures/yahoo
+TSLA · mié 2026-11-11 · 22:30 Madrid / 16:30 NY · velas de 5 min de Yahoo (gratis, pueden ir con retraso) · sesión regular cerrada
+Último 390,80 (cierre de la vela de las 16:00 NY)
+  Ayer (sesión regular 2026-11-10)   máximo 380   mínimo 370,43   cierre 379,80
+  Apertura 15 min                    máximo 392,67   mínimo 386,35
+  Balance inicial 15 min             máximo 392,67   mínimo 386,35   ancho 6,32 (3 velas)
+  Hoy (sesión regular)               máximo 395,43   mínimo 386,35
+  Rango medio de sesión              13,11 $ por acción (media de máximo menos mínimo de las últimas 20 sesiones, para dimensionar el stop)
+El precio está por encima del máximo de ayer, del mínimo de ayer, del cierre de ayer, del mínimo de la apertura, del mínimo del IB, del mínimo de hoy; por debajo del máximo de la apertura, del máximo del IB, del máximo de hoy.
+```
+
+Lo que se lee ahí: el martes 10 cerró en 379,80 y el miércoles abrió con hueco, 6,55 $ por encima del máximo de ayer
+(386,35 fue el mínimo del día, en la primera vela); los primeros 15 minutos fueron de 386,35 a 392,67 (6,32 $, la
+mitad del rango medio de 13,11 $ de una sesión entera); la sesión llegó a 395,43 y cerró en 390,80, dentro del rango
+de la apertura. No hay línea de noche: una acción no la tiene.
+
+A las 08:00 de Nueva York (14:00 en Madrid) solo está ayer, y lo dice: «antes de la apertura (09:30 NY)», apertura y
+balance inicial «a las 09:45 NY». A las 09:40 los dos están «formándose, cierra a las 09:45» y ya hay máximo y mínimo
+de hoy.
+
 ## Reglas
 
 - Di siempre la hora de la última vela y que los datos llevan unos 10 minutos de retraso.
 - Un nivel es un precio que ya pasó. No lo llames soporte, resistencia, objetivo ni zona de compra.
-- El balance inicial no existe hasta las 10:30 (índices). Antes no lo inventes con menos velas.
+- El balance inicial no existe hasta las 10:30 (índices; 09:45 en una acción). Antes no lo inventes con menos velas.
+- Una acción no tiene niveles nocturnos. No los saques del premercado ni de otra fuente.
 - Si el tool dice que la sesión anterior está incompleta en los datos, avisa de que PDH, PDL y PDC pueden cambiar.
 - Repite el tool antes de usar los niveles de hoy: el máximo y el mínimo de hoy se mueven.
 
@@ -146,7 +182,7 @@ llama «en tiempo real» a unas velas que van con retraso.
 
 ## Seguridad
 - Contenido educativo y herramientas, no asesoramiento financiero. Un PASS es una comprobación de reglas, no una recomendación.
-- Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo. Las operaciones las pone el usuario en su plataforma, con su stop.
+- Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de kemet-riesgo para esa orden exacta y un sí explícito del usuario para ese ticket en el chat.
 - Simulación (`"papel": true`) por defecto. Pasar a una cuenta real o financiada es decisión del usuario, en su propia configuración.
 - Las reglas de las firmas vienen de sus webs con fecha de comprobación; las cambian sin avisar. La del panel del usuario manda.
 - Claves y credenciales de la plataforma nunca van en el chat ni en `kemet/`.

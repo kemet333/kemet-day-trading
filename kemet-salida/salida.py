@@ -8,6 +8,7 @@ Solo biblioteca estándar. Nunca envía una orden.
     python3 salida.py plan --stop atr:1.5 --offline tests/fixtures/yahoo
     python3 salida.py plan --entrada 28429.75 --lado largo --ib-alto 28426 --ib-bajo 28199 --hora 10:45
     python3 salida.py show                                    # el kemet/plan.json actual
+    python3 salida.py plan --mercado TSLA                     # una acción: el riesgo va en dólares por acción
 
 Stops (todo redondeado al tick del contrato):
   ib-medio    el punto medio del IB (por defecto): donde la ruptura ha dejado de serlo
@@ -30,6 +31,8 @@ Nunca después de la hora límite de la firma menos 5 minutos (hora_limite y hor
 cierre de una sesión recortada menos 5 minutos.
 
 Riesgo en puntos y en dólares por micro, y por mini cuando la cuenta permite minis (max_mini en config) o no hay config.
+En una acción de EE. UU. (--mercado TSLA, o el entrada.json de una acción) todo va en dólares por acción: tick 0,01,
+plano a las 15:55 (13:00 menos 5 minutos en un día recortado de la NYSE), sin hora límite de firma, sin micros ni minis.
 Nunca imprime un P&L ni una rentabilidad esperada. Un stop es un plan, no una garantía.
 
 Códigos de salida: plan 0 = plan, 1 = rechazado; show 0 = hay plan, 1 = no hay; 2 = error (una línea, sin traza).
@@ -42,8 +45,8 @@ import re
 import sys
 
 import comun
-from comun import (CONTRATOS, CME_RECORTADO, KemetError, a_ny, al_tick, de_ny, dia_negociacion, escribir_json, hhmm,
-                   hora_doble, iso, leer_json, madrid_offset, num, ny_offset, parse_ahora, parse_hhmm, pts, sesion_regular,
+from comun import (CME_RECORTADO, KemetError, NYSE_RECORTADO, a_ny, al_tick, de_ny, dia_negociacion, escribir_json, hhmm,
+                   hora_doble, iso, leer_json, madrid_offset, num, ny_offset, parse_ahora, parse_hhmm, pts, resolver, sesion_regular,
                    ts_de_utc, usd, utc_ahora, velas, velas_cerradas)
 
 POR_DEFECTO = {"sin_entradas_despues": "15:00"}
@@ -87,10 +90,30 @@ def leer_config():
 
 
 def mercado_de(flag, cfg, doc=None):
-    m = (flag or (doc or {}).get("mercado") or (cfg or {}).get("mercado") or "NQ").upper()
-    if m not in CONTRATOS:
-        raise KemetError("mercado %r desconocido: usa %s" % (m, ", ".join(sorted(CONTRATOS))))
-    return m
+    """El código del instrumento: un futuro (NQ, MNQ...) o un ticker de acciones de EE. UU. (TSLA)."""
+    return resolver(flag or (doc or {}).get("mercado") or (cfg or {}).get("mercado") or "NQ")["codigo"]
+
+
+def es_accion(inst):
+    return inst["tipo"] == "accion"
+
+
+def unidad(inst):
+    """Puntos del contrato en un futuro, dólares por acción en una acción."""
+    return "$" if es_accion(inst) else "puntos"
+
+
+def dia_de(inst, ny):
+    """El día de negociación de CME en un futuro; la fecha de Nueva York en una acción."""
+    return ny.date() if es_accion(inst) else dia_negociacion(ny)
+
+
+def velas_al_tick(ch, inst):
+    """Una acción: los precios de Yahoo (float32) redondeados al céntimo. Un futuro queda tal cual."""
+    if not es_accion(inst):
+        return ch
+    t = inst["tick"]
+    return dict(ch, velas=[(b[0], al_tick(b[1], t), al_tick(b[2], t), al_tick(b[3], t), al_tick(b[4], t), b[5]) for b in ch["velas"]])
 
 
 def numero(texto, que):
@@ -150,20 +173,22 @@ def resolver_plano(codigo, dia, explicito, cfg, hora_entrada=None):
     firma menos 5 minutos ni del cierre de una sesión recortada menos 5 minutos. Rechaza una entrada a esa hora o después."""
     notas = []
     cfg = cfg or {}
+    inst = resolver(codigo)
     if explicito:
         t, origen = parse_hhmm(explicito, "--plano-a"), "--plano-a"
     elif cfg.get("plano_a"):
         t, origen = parse_hhmm(cfg["plano_a"], "plano_a"), "config"
     else:
-        t, origen = parse_hhmm(CONTRATOS[codigo]["plano"], "plano"), "contrato"
+        t, origen = parse_hhmm(inst["plano"], "plano"), "accion" if es_accion(inst) else "contrato"
     o, c = sesion_regular(codigo, dia)
     cierre = a_ny(c).time()
     tope_cierre = (dt.datetime.combine(dia, cierre) - dt.timedelta(minutes=MARGEN_LIMITE)).time()
     if t > tope_cierre:
+        recortados = NYSE_RECORTADO if es_accion(inst) else CME_RECORTADO
         notas.append("plano adelantado a las %s: la sesión regular cierra a las %s%s" % (
-            hhmm(tope_cierre), hhmm(cierre), " (%s)" % CME_RECORTADO[dia.isoformat()] if dia.isoformat() in CME_RECORTADO else ""))
+            hhmm(tope_cierre), hhmm(cierre), " (%s)" % recortados[dia.isoformat()] if dia.isoformat() in recortados else ""))
         t = tope_cierre
-    if cfg.get("hora_limite"):
+    if cfg.get("hora_limite") and not es_accion(inst):
         lim, aviso = hora_a_ny(cfg["hora_limite"], cfg.get("hora_limite_tz"), dia)
         if aviso:
             notas.append(aviso)
@@ -205,6 +230,7 @@ def velas_hasta_entrada(codigo, dia, barra, hora, offline, ahora_utc):
             ch = velas(codigo, "5d", "5m", offline)        # los fixtures de CL y GC son de 5 días
     except OSError as e:
         raise KemetError("no pude leer las velas de %s: %s" % (offline or "Yahoo", e))
+    ch = velas_al_tick(ch, resolver(codigo))
     cerradas = velas_cerradas(ch, ahora_utc) if ahora_utc else ch["velas"]
     o, c = sesion_regular(codigo, dia)
     ots, cts = ts_de_utc(o), ts_de_utc(c)
@@ -220,8 +246,8 @@ def velas_hasta_entrada(codigo, dia, barra, hora, offline, ahora_utc):
 # ---------------------------------------------------------------- el cálculo
 
 def calcular(codigo, lado, entrada, regla_stop, param_stop, regla_obj, param_obj, ib_alto=None, ib_bajo=None, atr=None, atr_n=None):
-    """Stop, objetivo y riesgo al tick. Lanza Rechazo con el motivo."""
-    con = CONTRATOS[codigo]
+    """Stop, objetivo y riesgo al tick. Lanza Rechazo con el motivo. `codigo` es un futuro o un ticker de acciones."""
+    con = resolver(codigo)
     tick = con["tick"]
     if lado not in ("largo", "corto"):
         raise KemetError("--lado es largo o corto")
@@ -245,7 +271,7 @@ def calcular(codigo, lado, entrada, regla_stop, param_stop, regla_obj, param_obj
         etiqueta = "lado opuesto del IB (%s)" % ("IB bajo" if lado == "largo" else "IB alto")
     elif regla_stop == "pts":
         bruto = e - signo * param_stop
-        etiqueta = "%s puntos %s de la entrada" % (pts(param_stop), "debajo" if lado == "largo" else "encima")
+        etiqueta = "%s %s %s de la entrada" % (pts(param_stop), unidad(con), "debajo" if lado == "largo" else "encima")
     elif regla_stop == "precio":
         bruto = param_stop
         etiqueta = "tu precio"
@@ -254,8 +280,8 @@ def calcular(codigo, lado, entrada, regla_stop, param_stop, regla_obj, param_obj
             raise KemetError("el stop atr:K necesita las velas de la sesión (--offline o Yahoo)")
         bruto = e - signo * param_stop * atr
         etiqueta = "%s x ATR(%d) %s de la entrada" % (nf(param_stop), atr_n, "debajo" if lado == "largo" else "encima")
-        detalle = "ATR %s puntos sobre las %d velas hasta la entrada%s" % (
-            pts(round(atr, 2)), atr_n, " (menos de %d)" % ATR_VELAS if atr_n < ATR_VELAS else "")
+        detalle = "ATR %s %s sobre las %d velas hasta la entrada%s" % (
+            pts(round(atr, 2)), unidad(con), atr_n, " (menos de %d)" % ATR_VELAS if atr_n < ATR_VELAS else "")
     else:
         raise KemetError("regla de stop desconocida %r" % regla_stop)
     stop = al_tick(bruto, tick)
@@ -267,8 +293,8 @@ def calcular(codigo, lado, entrada, regla_stop, param_stop, regla_obj, param_obj
             "debajo" if lado == "largo" else "encima"))
     riesgo = round(abs(e - stop), 4)
     if riesgo < MIN_TICKS * tick - 1e-9:
-        raise Rechazo("el stop está a %s puntos de la entrada, menos de %d ticks (%s): demasiado pegado para el ruido normal, ánchalo" % (
-            pts(riesgo), MIN_TICKS, pts(MIN_TICKS * tick)))
+        raise Rechazo("el stop está a %s %s de la entrada, menos de %d ticks (%s): demasiado pegado para el ruido normal, ánchalo" % (
+            pts(riesgo), unidad(con), MIN_TICKS, pts(MIN_TICKS * tick)))
     if regla_obj == "R":
         bruto_obj = e + signo * param_obj * riesgo
         etiqueta_obj = "%s R (%s el riesgo)" % (nf(param_obj), veces(param_obj))
@@ -289,6 +315,7 @@ def calcular(codigo, lado, entrada, regla_stop, param_stop, regla_obj, param_obj
     return {"entrada": e, "stop": stop, "etiqueta_stop": etiqueta, "detalle_stop": detalle, "objetivo": objetivo,
             "etiqueta_objetivo": etiqueta_obj, "detalle_objetivo": detalle_obj, "riesgo_pts": riesgo, "recorrido_pts": recorrido,
             "rr": rr, "riesgo_usd_micro": round(riesgo * con["punto_micro"], 2), "riesgo_usd_mini": round(riesgo * con["punto_mini"], 2),
+            "riesgo_usd_accion": round(riesgo, 2) if es_accion(con) else None,
             "ib": {"alto": ib_alto, "bajo": ib_bajo, "ancho": ancho} if ib_ok else None}
 
 
@@ -336,7 +363,7 @@ def construir(a, ahora_utc):
         except ValueError:
             raise KemetError("la fecha tiene que ser AAAA-MM-DD, no %r" % info["fecha"])
     else:
-        dia = dia_negociacion(a_ny(ahora_utc))
+        dia = dia_de(resolver(codigo), a_ny(ahora_utc))
     hora = parse_hhmm(info["hora"], "la hora de la entrada") if info["hora"] else None
     corte = parse_hhmm((cfg or {}).get("sin_entradas_despues") or POR_DEFECTO["sin_entradas_despues"], "sin_entradas_despues")
     if hora and hora > corte:
@@ -349,10 +376,10 @@ def construir(a, ahora_utc):
         atr, atr_n = atr_de(vs)
     c = calcular(codigo, info["lado"], info["entrada"], regla_stop, param_stop, regla_obj, param_obj, info["ib_alto"], info["ib_bajo"], atr, atr_n)
     plano, origen_plano, notas = resolver_plano(codigo, dia, a.plano_a, cfg, hora)
-    con = CONTRATOS[codigo]
+    con = resolver(codigo)
     regla_stop_txt = regla_stop if param_stop is None else "%s:%s" % (regla_stop, nf(param_stop).replace(".", "").replace(",", "."))
     regla_obj_txt = "%s:%s" % (regla_obj, nf(param_obj).replace(".", "").replace(",", "."))
-    plan = {"generado": iso(ahora_utc), "mercado": codigo, "micro": con["micro"], "mini": con["mini"], "fecha": dia.isoformat(),
+    plan = {"generado": iso(ahora_utc), "mercado": codigo, "instrumento": con["tipo"], "micro": con["micro"], "mini": con["mini"], "fecha": dia.isoformat(),
             "sistema": "ruptura-ib", "ib_minutos": info["ib_minutos"], "lado": info["lado"], "entrada": c["entrada"], "hora_entrada": hhmm(hora) if hora else None,
             "barra": info["barra"], "stop": c["stop"], "regla_stop": regla_stop_txt, "etiqueta_stop": c["etiqueta_stop"],
             "detalle_stop": c["detalle_stop"], "objetivo": c["objetivo"], "regla_objetivo": regla_obj_txt,
@@ -360,13 +387,15 @@ def construir(a, ahora_utc):
             "recorrido_pts": c["recorrido_pts"], "riesgo_usd_micro": c["riesgo_usd_micro"], "riesgo_usd_mini": c["riesgo_usd_mini"],
             "rr": c["rr"], "plano_a": hhmm(plano), "plano_a_origen": origen_plano, "sin_entradas_despues": hhmm(corte),
             "ib": c["ib"], "origen": info["origen"], "notas": notas, "nota": NOTA_STOP}
+    if es_accion(con):
+        plan["riesgo_usd_accion"] = c["riesgo_usd_accion"]
     if atr is not None:
         plan["atr"] = round(atr, 4)
         plan["atr_velas"] = atr_n
-    hoy = dia_negociacion(a_ny(ahora_utc))
+    hoy = dia_de(con, a_ny(ahora_utc))
     if dia != hoy:
         plan["notas"].append("este plan es del %s, no de hoy (%s)" % (fecha_es(dia), fecha_es(hoy)))
-    plan["_mostrar_mini"] = cfg is None or (cfg.get("max_mini") or 0) >= 1
+    plan["_mostrar_mini"] = (cfg is None or (cfg.get("max_mini") or 0) >= 1) and not es_accion(con)
     plan["_sin_config"] = cfg is None
     return plan
 
@@ -375,7 +404,9 @@ def construir(a, ahora_utc):
 
 def describir(plan, mostrar_mini=True):
     dia = dt.date.fromisoformat(plan["fecha"])
-    con = CONTRATOS[plan["mercado"]]
+    con = resolver(plan["mercado"])
+    accion = es_accion(con)
+    u = unidad(con)
     out = ["Plan de salida: %s %s, %s, ruptura del IB%s sobre velas de 5 minutos" % (
         plan["mercado"], plan["lado"], fecha_es(dia), " de %d minutos" % plan["ib_minutos"] if plan.get("ib_minutos") else "")]
     cuando = ""
@@ -386,16 +417,19 @@ def describir(plan, mostrar_mini=True):
     out.append("  Entrada   %s%s" % (pts(plan["entrada"]), cuando))
     out.append("  Stop      %s  %s%s" % (pts(plan["stop"]), plan.get("etiqueta_stop", ""), (": " + plan["detalle_stop"]) if plan.get("detalle_stop") else ""))
     out.append("  Objetivo  %s  %s%s" % (pts(plan["objetivo"]), plan.get("etiqueta_objetivo", ""), (": " + plan["detalle_objetivo"]) if plan.get("detalle_objetivo") else ""))
-    riesgo = "  Riesgo    %s puntos, %s por micro (%s)" % (pts(plan["riesgo_pts"]), dinero(plan["riesgo_usd_micro"]), con["micro"])
-    if mostrar_mini:
-        riesgo += ", %s por mini (%s)" % (dinero(plan["riesgo_usd_mini"]), con["mini"])
+    if accion:
+        riesgo = "  Riesgo    %s por acción (el riesgo en dólares es ese por el número de acciones)" % dinero(plan["riesgo_pts"])
+    else:
+        riesgo = "  Riesgo    %s puntos, %s por micro (%s)" % (pts(plan["riesgo_pts"]), dinero(plan["riesgo_usd_micro"]), con["micro"])
+        if mostrar_mini:
+            riesgo += ", %s por mini (%s)" % (dinero(plan["riesgo_usd_mini"]), con["mini"])
     out.append(riesgo)
-    out.append("  Recorrido %s puntos hasta el objetivo, %s el riesgo" % (pts(plan.get("recorrido_pts", abs(plan["objetivo"] - plan["entrada"]))), veces(plan["rr"])))
+    out.append("  Recorrido %s %s hasta el objetivo, %s el riesgo" % (pts(plan.get("recorrido_pts", abs(plan["objetivo"] - plan["entrada"]))), u, veces(plan["rr"])))
     plano_utc = de_ny(dt.datetime.combine(dia, parse_hhmm(plan["plano_a"])))
     out.append("  Plano a las %s, gane o pierda: nada se queda abierto" % hora_doble(plano_utc))
     if plan.get("ib"):
         ib = plan["ib"]
-        out.append("  IB        %s a %s, %s puntos" % (pts(ib["bajo"]), pts(ib["alto"]), pts(ib["ancho"])))
+        out.append("  IB        %s a %s, %s %s" % (pts(ib["bajo"]), pts(ib["alto"]), pts(ib["ancho"]), u))
     out.append("Stop y objetivo van puestos antes de la entrada. Si el precio toca el stop, fuera; el stop nunca se aleja.")
     out.append(NOTA_STOP)
     return out
@@ -422,11 +456,16 @@ def cmd_plan(a):
         print(l)
     for n in plan["notas"]:
         print("Nota: %s." % n)
+    accion = plan.get("instrumento") == "accion"
     if sin_config:
-        print("Sin kemet/config.json: plano a las %s del contrato y sin hora límite de firma." % plan["plano_a"])
+        if accion:
+            print("Sin kemet/config.json: plano a las %s (una acción no tiene hora límite de firma)." % plan["plano_a"])
+        else:
+            print("Sin kemet/config.json: plano a las %s del contrato y sin hora límite de firma." % plan["plano_a"])
     if ruta_out:
         print("Escrito %s." % ruta_out)
-    print("Siguiente: kemet-maquina lo repite sobre sesiones pasadas y kemet-tamano lo convierte en contratos. No se ha enviado ninguna orden.")
+    print("Siguiente: kemet-maquina lo repite sobre sesiones pasadas y kemet-tamano lo convierte en %s. No se ha enviado ninguna orden." % (
+        "acciones enteras" if accion else "contratos"))
     return 0
 
 
@@ -444,7 +483,7 @@ def cmd_show(a):
     cfg = leer_config()
     for l in describir(plan, cfg is None or (cfg.get("max_mini") or 0) >= 1):
         print(l)
-    hoy = dia_negociacion(a_ny(parse_ahora(a.ahora) if a.ahora else utc_ahora()))
+    hoy = dia_de(resolver(plan["mercado"]), a_ny(parse_ahora(a.ahora) if a.ahora else utc_ahora()))
     if plan["fecha"] != hoy.isoformat():
         print("Nota: este plan es del %s, no de hoy (%s)." % (fecha_es(dt.date.fromisoformat(plan["fecha"])), fecha_es(hoy)))
     return 0
@@ -455,7 +494,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("plan", help="calcula stop y objetivo")
     p.add_argument("--de", metavar="RUTA", help="entrada.json del que partir (por defecto kemet/entrada.json)")
-    p.add_argument("--mercado", help="ES, NQ, CL o GC (por defecto el del entrada.json o del config, si no NQ)")
+    p.add_argument("--mercado", "--simbolo", dest="mercado", help="un futuro (ES, NQ, CL, GC...) o un ticker de EE. UU. (TSLA); por defecto el del entrada.json o del config, si no NQ")
     p.add_argument("--entrada", type=float, help="precio de entrada, para planificar sin entrada.json o por adelantado")
     p.add_argument("--lado", choices=["largo", "corto"])
     p.add_argument("--ib-alto", type=float, dest="ib_alto")

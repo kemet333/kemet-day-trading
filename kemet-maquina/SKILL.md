@@ -2,13 +2,14 @@
 name: kemet-maquina
 description: >-
   La máquina del tiempo. Antes de arriesgar un dólar, repite el resto de la sesión 10.000 veces desde tu entrada
-  con las velas de 5 minutos del propio contrato (ES, NQ, CL o GC, las últimas 60 sesiones de Yahoo) y vuelve a
-  pasar la misma regla por cada sesión anterior. Toma el plan de kemet-salida (entrada, stop, objetivo, hora) o lo
+  con las velas de 5 minutos del propio instrumento (futuros ES, NQ, CL, GC o una acción de EE. UU. como TSLA, las
+  últimas 60 sesiones de Yahoo) y vuelve a pasar la misma regla por cada sesión anterior. Toma el plan de kemet-salida (entrada, stop, objetivo, hora) o lo
   recibe por flags, y devuelve las probabilidades de objetivo primero, stop primero o ninguno a tu hora de estar
   plano, dónde queda el precio, la R media, la historia real y un veredicto en una línea; después pasa a
   kemet-tamano. Úsala cuando el usuario diga «qué probabilidad tiene», «simúlalo», «es un coin flip», «monte
   carlo», «cuántas veces llega al objetivo», «repite este día», «backtest de esta entrada», o siempre después de que
-  kemet-salida escriba un plan y antes de kemet-tamano. Todo en puntos y en R; nunca un P&L esperado.
+  kemet-salida escriba un plan y antes de kemet-tamano. Todo en puntos (dólares por acción en una acción) y en R;
+  nunca un P&L esperado.
 argument-hint: "[run | chart] [--hasta 15:55] [--semilla 19]"
 ---
 
@@ -30,6 +31,8 @@ python3 "${CLAUDE_SKILL_DIR}/maquina.py" run --hasta 15:55        # cada repetic
 python3 "${CLAUDE_SKILL_DIR}/maquina.py" run --json
 python3 "${CLAUDE_SKILL_DIR}/maquina.py" run --mercado NQ --fecha 2026-11-11 --lado largo \
     --entrada 28429.75 --stop 28312.5 --objetivo 28547 --hora-entrada 10:45
+python3 "${CLAUDE_SKILL_DIR}/maquina.py" run --mercado TSLA --fecha 2026-11-11 --lado largo \
+    --entrada 393.08 --stop 389.51 --objetivo 396.65 --hora-entrada 10:15      # una acción: IB de 15 minutos
 python3 "${CLAUDE_SKILL_DIR}/maquina.py" chart --desde            # abanico ASCII del resultado guardado
 ```
 
@@ -48,10 +51,11 @@ o la carpeta `tests/fixtures/yahoo`), `--ahora "2026-11-11 16:30"` (hora de Nuev
 
 ## Cómo funciona
 
-1. **El pool.** Solo sesiones regulares completas del contrato anteriores a la fecha del plan: NQ y ES las 78 velas
-   de 09:30 a 16:00 NY, CL 66, GC 62, por día de negociación de CME. Las recortadas, las que tienen huecos y la de
-   hoy se quedan fuera. Cada vela se convierte en cuatro ratios sobre el cierre de la vela anterior: apertura,
-   máximo, mínimo y cierre.
+1. **El pool.** Solo sesiones regulares completas del instrumento anteriores a la fecha del plan: NQ y ES las 78
+   velas de 09:30 a 16:00 NY, CL 66, GC 62, por día de negociación de CME; una acción de EE. UU., las 78 velas de
+   09:30 a 16:00 por fecha de Nueva York, sin noche y con los precios de Yahoo al céntimo. Las recortadas, las que
+   tienen huecos y la de hoy se quedan fuera. Cada vela se convierte en cuatro ratios sobre el cierre de la vela
+   anterior: apertura, máximo, mínimo y cierre.
 2. **Una repetición.** Arranca en tu precio de entrada. Para cada vela que queda de sesión elige al azar una vela
    pasada de la misma hora del día (más o menos 2 velas) y la escala al precio actual. Vela a vela comprueba primero
    el stop y después el objetivo: una vela que toca los dos cuenta como stop. En un corto el stop está por encima y
@@ -62,7 +66,7 @@ o la carpeta `tests/fixtures/yahoo`), `--ahora "2026-11-11 16:30"` (hora de Nuev
    si no, la distancia desde la entrada a `--hasta` dividida entre el riesgo. Un hueco a través del stop cuenta -1R
    aquí; un relleno real puede ser peor.
 4. **La historia.** La regla del plan, tal cual, en cada una de esas sesiones: balance inicial de los mismos
-   minutos (60 por defecto), disparo en la primera vela de 5 minutos cerrada después del IB que cierra por encima
+   minutos (60 por defecto en futuros, 15 en una acción), disparo en la primera vela de 5 minutos cerrada después del IB que cierra por encima
    del IB alto (largo) o por debajo del IB bajo (corto), entrada en ese cierre, sin entradas antes de las 09:45 ni
    después de las 15:00 (o lo que diga el plan o `kemet/config.json`), stop según `regla_stop` (punto medio del IB
    por defecto, lado opuesto, puntos fijos), objetivo según `regla_objetivo` (1R por defecto, 2R), plano a `--hasta`.
@@ -166,6 +170,43 @@ NQ 11/11/2026, 2.000 caminos desde la entrada de las 10:45 (semilla 19)
 * mediana   : la mitad central de los caminos   . el 90 % de los caminos   - stop y objetivo
 ```
 
+## Ejemplo: TSLA, miércoles 11 de noviembre de 2026
+
+Una acción: balance inicial de 15 minutos, 09:30 a 09:45, 386,35 a 392,67 (6,32 $). La vela de 10:10 cierra en
+393,08, por encima del IB alto: entrada 393,08 a las 10:15 (vela 9), stop en el punto medio del IB 389,51 (3,57 $ por
+acción), objetivo 1R en 396,65. Con el plan de kemet-salida en `kemet/plan.json` y `--offline tests/fixtures/yahoo
+--ahora "2026-11-11 16:30"`:
+
+```
+Máquina del tiempo de TSLA, miércoles 11/11/2026 (22:30 Madrid / 16:30 NY)
+TSLA largo: entrada 393,08 a las 10:15 (vela 9), stop 389,51 (3,57 $), objetivo 396,65 (3,57 $, 1R).
+1R = 3,57 $ por acción. Es contexto del tamaño, no un resultado esperado.
+10.000 repeticiones del resto de la sesión, de 10:15 a 15:55 (68 velas de 5 minutos), semilla 19.
+Cada vela sale entera de las velas de 5 minutos de TSLA a la misma hora del día (más o menos 2 velas) en sus últimas 57 sesiones regulares completas (20/08/2026 a 10/11/2026).
+
+  objetivo primero   52,6 %
+  stop primero       41,3 %
+  ninguno            6,1 %    sigue abierta a las 15:55
+  verde              55,6 %   objetivo primero, o por encima de la entrada a las 15:55
+
+  Precio a las 15:55: mediana 392,99, el 90 % de las repeticiones entre 383,60 y 402,15.
+  R media: +0,113 (1R = 3,57 $; +1R en el objetivo, -1R en el stop).
+
+Historia: la misma regla (IB de 15 minutos, primera vela cerrada fuera del IB entre las 09:45 y las 15:00, entrada en su cierre, stop en el punto medio del IB, objetivo 1R, plano a la hora de --hasta) en esas 57 sesiones reales disparó 51 veces (30 largos, 21 cortos; 6 sesiones sin cierre fuera del IB): 16 objetivo, 18 stop, 17 ninguno a las 15:55. R media -0,056.
+
+Se inclina hacia el objetivo: objetivo primero 52,6 % frente a stop primero 41,3 %.
+
+Fuera del pool 1 sesión(es) corta(s) (recortadas o con huecos): 05/11/2026.
+Simulación hecha con las últimas 57 sesiones completas de TSLA. No es una predicción: un dato, una noticia o un día de pánico hacen lo que esas sesiones no hicieron. Misma semilla, mismos números. Repite esta corrida con --semilla 19.
+Siguiente: kemet-tamano dice cuántas acciones caben con este stop en tu cuenta; kemet-riesgo lo comprueba.
+```
+
+Aquí las repeticiones y la historia no dicen lo mismo, y eso es lo que hay que contar: las repeticiones se inclinan
+hacia el objetivo (el 56 % de las que tocan un lado), pero la regla, tal cual, en las 57 sesiones reales anteriores
+dio 16 objetivos contra 18 stops con 17 abiertas al cierre y una R media negativa. Ese día el objetivo no llegó
+(máximo 395,43 a las 11:00) y el stop se tocó a las 15:55. Un stop de 3,57 $ en una acción que se mueve 13 $ de media
+al día es estrecho; la historia lo enseña antes de que `/kemet-tamano` calcule las acciones.
+
 ## Reglas
 
 - Cada cifra sale de la corrida. Una moneda al aire nunca se redondea a ventaja.
@@ -186,7 +227,7 @@ el pool.
 
 ## Seguridad
 - Contenido educativo y herramientas, no asesoramiento financiero. Un PASS es una comprobación de reglas, no una recomendación.
-- Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo. Las operaciones las pone el usuario en su plataforma, con su stop.
+- Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de kemet-riesgo para esa orden exacta y un sí explícito del usuario para ese ticket en el chat.
 - Simulación (`"papel": true`) por defecto. Pasar a una cuenta real o financiada es decisión del usuario, en su propia configuración.
 - Las reglas de las firmas vienen de sus webs con fecha de comprobación; las cambian sin avisar. La del panel del usuario manda.
 - Claves y credenciales de la plataforma nunca van en el chat ni en `kemet/`.

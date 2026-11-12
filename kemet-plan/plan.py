@@ -5,6 +5,7 @@
     python3 plan.py plan --stop 40 --escribir             # con el tamaño en contratos y guarda kemet/plan-sesion.json
     python3 plan.py plan --mercado ES --semaforo ambar    # fuerza el semáforo
     python3 plan.py plan --stop 40 --drawdown 2500 --diario 1000     # sin config: tus límites a mano
+    python3 plan.py plan --mercado TSLA --stop 3.57                   # una acción con la cuenta propia (tamano.py config --propia)
     python3 plan.py agenda --fecha 2026-11-11 --dato "08:30 IPC fuerte" --dato "10:30 Inventarios EIA CL"
 
 plan    Escribe el plan de `kemet-desk/references/plan-de-sesion.md`: las franjas de la sesión de Nueva York (y su
@@ -21,6 +22,10 @@ Regla Kemet del tamaño: pérdida máxima del día = la menor entre el límite d
 del drawdown; en ámbar o rojo, la mitad. Riesgo por operación = pérdida máxima del día entre 3 (tres fallos y paras).
 Contratos = parte entera de riesgo por operación / (stop en puntos × valor del punto del micro), con el tope de micros
 de la cuenta. Un semáforo ámbar sale solo cuando hay un dato fuerte en la agenda para ese mercado.
+Cuenta propia (tamano.py config --propia): la pérdida máxima del día y el riesgo por operación son los tuyos (la mitad
+en ámbar o rojo). En una acción el stop va en dólares por acción y el tamaño en acciones enteras: riesgo por operación /
+stop, y con el cierre de ayer como precio de referencia los topes de posición, orden máxima y efectivo. Sin hora límite
+de firma; las ventanas son las de la agenda y la apertura 09:30 a 09:45; sin niveles de la noche.
 
 Código de salida 0 si hay plan, 1 si no se pudo escribir (sin datos ni sesión), 2 si hay un error.
 """
@@ -275,6 +280,44 @@ def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3):
     return out
 
 
+def tamano_propia(inst, semaforo_, stop, cfg, precio_ref=None):
+    """La cuenta propia: la pérdida del día y el riesgo por operación de la config (la mitad en ámbar o rojo). En una acción,
+    acciones enteras = riesgo / stop en dólares por acción; con un precio de referencia (el cierre de ayer) se aplican además
+    los topes de posición, orden máxima y efectivo. En un futuro sin firma, micros como siempre con el tope opcional."""
+    factor = 1.0 if semaforo_ == "verde" else 0.5
+    perdida = float(cfg["perdida_max_dia"]) * factor
+    riesgo = float(cfg["riesgo_por_operacion"]) * factor if cfg.get("riesgo_por_operacion") else perdida / float(cfg.get("fallos_y_paras") or 3)
+    perdida = int(perdida) if perdida == int(perdida) else round(perdida, 2)
+    out = {"micro": inst["micro"], "instrumento": inst["tipo"], "perdida_max_dia": perdida, "riesgo_por_operacion": round(riesgo, 2), "cuarto_drawdown": None,
+           "limite_diario_firma": None, "fallos_y_paras": int(cfg.get("fallos_y_paras") or 3), "max_micro": cfg.get("max_micro"), "presupuesto": cfg.get("presupuesto")}
+    if not stop:
+        return out
+    if inst["tipo"] == "futuro":
+        por_micro = stop * inst["punto_micro"]
+        n = int(math.floor(riesgo / por_micro))
+        cap = cfg.get("max_micro")
+        out.update({"stop_pts": stop, "riesgo_usd_micro": round(por_micro, 2), "contratos_sin_tope": n, "contratos": min(n, int(cap)) if cap else n})
+        return out
+    stop = comun.al_tick(stop, inst["tick"])
+    limites = [{"nombre": "riesgo por operación", "acciones": int(math.floor(riesgo / stop + 1e-9)), "como": "%s / %s por acción" % (comun.usd(riesgo, 2), comun.usd(stop, 2))}]
+    presupuesto = float(cfg.get("presupuesto") or 0)
+    if precio_ref and presupuesto:
+        if cfg.get("max_posicion_pct"):
+            tope = presupuesto * float(cfg["max_posicion_pct"]) / 100.0
+            limites.append({"nombre": "posición máxima", "acciones": int(math.floor(tope / precio_ref + 1e-9)), "como": "%s %% de %s = %s / %s" % (comun.num(float(cfg["max_posicion_pct"]), 0), comun.usd(presupuesto), comun.usd(tope), comun.usd(precio_ref, 2))})
+        if cfg.get("max_orden_usd"):
+            limites.append({"nombre": "orden máxima", "acciones": int(math.floor(float(cfg["max_orden_usd"]) / precio_ref + 1e-9)), "como": "%s / %s" % (comun.usd(float(cfg["max_orden_usd"])), comun.usd(precio_ref, 2))})
+        colchon = presupuesto * float(cfg.get("efectivo_pct") or 0) / 100.0
+        limites.append({"nombre": "efectivo", "acciones": int(math.floor((presupuesto - colchon) / precio_ref + 1e-9)), "como": "%s menos %s de colchón = %s / %s" % (comun.usd(presupuesto), comun.usd(colchon), comun.usd(presupuesto - colchon), comun.usd(precio_ref, 2))})
+    n = max(0, min(l["acciones"] for l in limites))
+    manda = [l for l in limites if l["acciones"] == n][0]
+    for l in limites:
+        l["manda"] = l is manda
+    out.update({"stop_pts": stop, "riesgo_por_accion": stop, "limites": limites, "acciones_sin_tope": limites[0]["acciones"], "acciones": n, "contratos": n,
+                "manda": manda["nombre"], "precio_referencia": precio_ref})
+    return out
+
+
 def niveles(mercado, fecha, ahora_utc, offline=None):
     """Los niveles del día: kemet/niveles.json si es de hoy y de este mercado; si no, de Yahoo (o del --offline). (doc, nota)."""
     guardado = comun.leer_json("niveles.json", obligatorio=False)
@@ -291,7 +334,8 @@ def niveles(mercado, fecha, ahora_utc, offline=None):
     if ch is None:
         raise ultimo_error
     cerradas = comun.velas_cerradas(ch, ahora_utc)
-    dias = comun.por_dia(cerradas)
+    dias = comun.por_dia(cerradas, mercado)
+    accion = comun.es_accion(mercado)
     previos = [d for d in dias if d < fecha and comun.regular(mercado, dias[d], d)]
     if not previos:
         return {}, "sin sesión anterior en los datos"
@@ -301,23 +345,28 @@ def niveles(mercado, fecha, ahora_utc, offline=None):
     apertura, _ = comun.sesion_regular(mercado, fecha)
     t_ap = comun.ts_de_utc(apertura)
     hoy = dias.get(fecha, [])
-    noche = [b for b in hoy if b[0] < t_ap]
+    noche = [b for b in hoy if b[0] < t_ap] if not accion else []      # una acción no tiene sesión nocturna
     if noche:
         out["onh"], out["onl"] = comun.rango(noche)
     rth_hoy = comun.regular(mercado, hoy, fecha)
     if rth_hoy and comun.ts_de_utc(ahora_utc) >= t_ap + 900:
         out["orh"], out["orl"] = comun.rango([b for b in rth_hoy if b[0] < t_ap + 900])
-    ib = comun.balance_inicial(mercado, hoy, fecha)
+    ib = comun.balance_inicial(mercado, hoy, fecha) if not accion else None     # en una acción el balance es la apertura de 15 min
     if ib:
         out["ibh"], out["ibl"] = ib["alto"], ib["bajo"]
-    tick = comun.CONTRATOS[mercado]["tick"]
+    tick = comun.resolver(mercado)["tick"]
     out = {k: comun.al_tick(v, tick) for k, v in out.items()}      # Yahoo trae ruido de coma flotante en GC
     return out, "sesión anterior %s, velas de 5 min de Yahoo" % ayer.isoformat()
 
 
-def siguiente(ahora_ny, cfg, vents, plano_a, cierre_rth):
+def siguiente(ahora_ny, cfg, vents, plano_a, cierre_rth, mercado="NQ"):
     """La única cosa que hace el usuario a continuación, según la hora."""
-    estado, motivo = comun.estado_globex(comun.de_ny(ahora_ny))
+    if comun.es_accion(mercado):
+        clave = ahora_ny.date().isoformat()
+        estado = "cerrado" if ahora_ny.weekday() >= 5 or clave in comun.NYSE_CERRADO else "abierto"
+        motivo = comun.NYSE_CERRADO.get(clave, "fin de semana")
+    else:
+        estado, motivo = comun.estado_globex(comun.de_ny(ahora_ny))
     if estado == "cerrado":
         return "Mercado cerrado (%s): revisa el diario, marca máximo, mínimo y cierre de la última sesión y mira qué datos salen el próximo día." % motivo
     h = comun.hhmm(ahora_ny.time())
@@ -343,16 +392,18 @@ def siguiente(ahora_ny, cfg, vents, plano_a, cierre_rth):
 def construir(a):
     ahora = comun.parse_ahora(a.ahora)
     ahora_ny = comun.a_ny(ahora)
-    fecha = comun.dia_negociacion(ahora_ny)
     cfg = config()
     avisos = []
     if cfg is None:
         avisos.append("sin kemet/config.json: valores por defecto (NQ, verde, entradas 09:45–14:00, plano a las 15:55, Madrid); el tamaño solo con --drawdown")
         cfg = dict(DEFECTO)
-    mercado = (a.mercado or cfg.get("mercado") or "NQ").upper()
-    if mercado not in comun.CONTRATOS:
-        raise KemetError("mercado %s no soportado: ES, NQ, CL o GC" % mercado)
-    c = comun.CONTRATOS[mercado]
+    fecha = ahora_ny.date() if comun.es_accion(a.mercado or cfg.get("mercado") or "NQ") else comun.dia_negociacion(ahora_ny)
+    inst = comun.resolver(a.mercado or cfg.get("mercado") or "NQ")
+    mercado, accion, propia = inst["codigo"], inst["tipo"] == "accion", cfg.get("tipo_cuenta") == "propia" or cfg.get("cuenta") == "propia"
+    c = inst
+    if accion and not propia:
+        avisos.append("%s es una acción y %s: el tamaño en acciones sale con una cuenta propia (tamano.py config --propia)"
+                      % (mercado, "la config es de una cuenta de firma (futuros)" if cfg.get("firma") else "no hay cuenta propia configurada"))
     plano_a = cfg.get("plano_a") or c["plano"]
     comun.parse_hhmm(plano_a, "plano_a")
     zona = cfg.get("zona_usuario") or "Europe/Madrid"
@@ -365,7 +416,13 @@ def construir(a):
     drawdown = a.drawdown or cfg.get("drawdown")
     diario = a.diario if a.diario is not None else cfg.get("limite_diario_firma")
     tam, aviso_tam = None, None
-    if drawdown:
+    if propia and cfg.get("perdida_max_dia"):
+        tam = tamano_propia(inst, sem, a.stop, cfg, None)
+        if not a.stop:
+            aviso_tam = "dime tu stop (--stop, %s) y te digo cuánt%s caben" % (("en dólares por acción", "as acciones") if accion else ("en puntos", "os " + c["micro"]))
+    elif accion:
+        aviso_tam = "sin cuenta propia no hay tamaño en acciones: tamano.py config --propia --presupuesto … --max-perdida-operacion … --max-perdida-dia …"
+    elif drawdown:
         tam = tamano(mercado, sem, a.stop, float(drawdown), float(diario) if diario else None, cfg.get("max_micro"), int(cfg.get("fallos_y_paras") or 3))
         if not a.stop:
             aviso_tam = "dime tu stop en puntos (--stop) y te digo cuántos %s caben" % c["micro"]
@@ -380,22 +437,53 @@ def construir(a):
             niv, nota_niv = niveles(mercado, fecha, ahora, a.offline)
         except KemetError as e:
             nota_niv = "no disponibles: %s" % e
+            avisos.append("sin niveles de %s (%s): márcalos a mano o ejecuta niveles.py" % (mercado, e))
+    if tam and accion and "stop_pts" in tam:
+        tam = tamano_propia(inst, sem, a.stop, cfg, niv.get("pdc"))
     # hora límite
     hora_limite = cfg.get("hora_limite")
     hora_limite_ny = a_ny_desde(hora_limite, cfg.get("hora_limite_tz"), fecha) if hora_limite else None
+    if propia:
+        hora_limite = None
     if hora_limite and hora_limite_ny is None:
         avisos.append("no sé convertir la zona %s de la hora límite: la dejo como viene" % cfg.get("hora_limite_tz"))
     if hora_limite_ny and plano_a >= hora_limite_ny:
         avisos.append("plano_a (%s) no está antes de la hora límite de la firma (%s NY): adelántalo" % (plano_a, hora_limite_ny))
     _, cierre = comun.sesion_regular(mercado, fecha)
-    doc = {"generado": comun.iso(ahora), "mercado": mercado, "fecha": fecha.isoformat(), "semaforo": sem, "razones": razones,
+    doc = {"generado": comun.iso(ahora), "mercado": mercado, "instrumento": inst["tipo"], "fecha": fecha.isoformat(), "semaforo": sem, "razones": razones,
            "ventanas": vents, "niveles": niv, "tamano": tam, "hora_limite": hora_limite, "hora_limite_tz": cfg.get("hora_limite_tz"),
            "hora_limite_ny": hora_limite_ny, "plano_a": plano_a, "sin_entradas_antes": cfg["sin_entradas_antes"], "sin_entradas_despues": cfg["sin_entradas_despues"],
            "zona_usuario": zona, "agenda": datos, "avisos": avisos, "nota_niveles": nota_niv, "nota_tamano": aviso_tam,
-           "siguiente": siguiente(ahora_ny, cfg, vents, plano_a, comun.hhmm(comun.a_ny(cierre).time()))}
+           "siguiente": siguiente(ahora_ny, cfg, vents, plano_a, comun.hhmm(comun.a_ny(cierre).time()), mercado),
+           "tipo_cuenta": "propia" if propia else ("firma" if cfg.get("firma") else None)}
     if cfg.get("cuenta_nombre"):
         doc["cuenta"] = cfg["cuenta_nombre"]
     return doc, ahora
+
+
+def texto_tamano_accion(tam, doc):
+    """El bloque de tamaño de una acción con la cuenta propia."""
+    out = []
+    detalle = "tu pérdida máxima del día" + (", la mitad por %s" % {"ambar": "ámbar"}.get(doc["semaforo"], doc["semaforo"]) if doc["semaforo"] != "verde" else "")
+    if "acciones" not in tam:
+        out.append("Mi tamaño: pérdida máxima del día %s (%s) · riesgo por operación %s" % (comun.usd(tam["perdida_max_dia"]), detalle, comun.usd(tam["riesgo_por_operacion"], 2)))
+        out.append("  %s" % doc["nota_tamano"])
+        return out
+    linea = "Mi tamaño: %d acciones de %s por operación con stop de %s por acción" % (tam["acciones"], doc["mercado"], comun.usd(tam["stop_pts"], 2))
+    if tam["manda"] != "riesgo por operación":
+        linea += " (manda %s)" % tam["manda"]
+    if tam["acciones"] == 0:
+        linea += " · no cabe ninguna: reduce el stop o espera un día verde"
+    out.append(linea)
+    out.append("  pérdida máxima del día %s (%s) · riesgo por operación %s · al stop pierdes %s por acción" % (
+        comun.usd(tam["perdida_max_dia"]), detalle, comun.usd(tam["riesgo_por_operacion"], 2), comun.usd(tam["stop_pts"], 2)))
+    for l in tam["limites"]:
+        out.append("  %-22s %-48s %4d acciones%s" % (l["nombre"], l["como"], l["acciones"], "  <- manda" if l["manda"] else ""))
+    if tam.get("precio_referencia"):
+        out.append("  posición, orden máxima y efectivo con el cierre de ayer (%s) como precio; con la entrada real los recalcula kemet-tamano" % comun.usd(tam["precio_referencia"], 2))
+    else:
+        out.append("  sin precio de referencia no aplico posición, orden máxima ni efectivo: los recalcula kemet-tamano con la entrada")
+    return out
 
 
 def _doble(hhmm_, fecha, zona):
@@ -407,7 +495,8 @@ def texto(doc, ahora):
     fecha = dt.date.fromisoformat(doc["fecha"])
     zona = doc["zona_usuario"]
     madrid = zona == "Europe/Madrid"
-    c = comun.CONTRATOS[doc["mercado"]]
+    c = comun.resolver(doc["mercado"])
+    accion = c["tipo"] == "accion"
     out = ["PLAN · %s · %s · %s" % (doc["mercado"], fecha_es(fecha), comun.hora_doble(ahora))]
     if doc.get("cuenta"):
         out.append("Cuenta: %s" % doc["cuenta"])
@@ -436,13 +525,31 @@ def texto(doc, ahora):
         if "orh" in niv:
             out.append("  Apertura   máximo %s   mínimo %s   (15 min)" % (comun.pts(niv["orh"]), comun.pts(niv["orl"])))
         if "ibh" in niv:
-            out.append("  Balance    máximo %s   mínimo %s   (1 h)" % (comun.pts(niv["ibh"]), comun.pts(niv["ibl"])))
+            out.append("  Balance    máximo %s   mínimo %s   (%s)" % (comun.pts(niv["ibh"]), comun.pts(niv["ibl"]), "15 min" if accion else "1 h"))
+        if accion:
+            out.append("  Sin sesión nocturna: una acción abre a las 09:30 y los primeros 15 minutos son su balance inicial.")
         if doc["mercado"] in ("ES", "NQ"):
             out.append("  Gamma: el pivote y los muros de calls y puts los marcas tú desde tu fuente de opciones; este pack no los tiene.")
     else:
         out.append("Niveles que marco: %s. Ejecuta niveles.py (kemet-niveles) y márcalos a mano." % (doc["nota_niveles"] or "no calculados"))
     tam = doc["tamano"]
-    if tam:
+    if tam and tam.get("instrumento") == "accion":
+        out.extend(texto_tamano_accion(tam, doc))
+    elif tam and doc.get("tipo_cuenta") == "propia":
+        detalle = "tu pérdida máxima del día" + (", la mitad por %s" % sem if doc["semaforo"] != "verde" else "")
+        if "contratos" in tam:
+            linea = "Mi tamaño: %d %s por operación con stop de %s pts" % (tam["contratos"], tam["micro"], comun.pts(tam["stop_pts"]))
+            if tam["max_micro"] and tam["contratos_sin_tope"] > tam["max_micro"]:
+                linea += " (tu tope: %d micros)" % tam["max_micro"]
+            if tam["contratos"] == 0:
+                linea += " · no cabe ninguno: reduce el stop o espera un día verde"
+            out.append(linea)
+            out.append("  pérdida máxima del día %s (%s) · riesgo por operación %s · al stop pierdes %s por %s" % (
+                comun.usd(tam["perdida_max_dia"]), detalle, comun.usd(tam["riesgo_por_operacion"], 2), comun.usd(tam["riesgo_usd_micro"], 2), tam["micro"]))
+        else:
+            out.append("Mi tamaño: pérdida máxima del día %s (%s) · riesgo por operación %s" % (comun.usd(tam["perdida_max_dia"]), detalle, comun.usd(tam["riesgo_por_operacion"], 2)))
+            out.append("  %s" % doc["nota_tamano"])
+    elif tam:
         detalle = "un cuarto del drawdown = %s" % comun.usd(tam["cuarto_drawdown"])
         if tam["limite_diario_firma"]:
             detalle += ", límite diario de la firma %s, manda el menor" % comun.usd(tam["limite_diario_firma"])
@@ -463,7 +570,9 @@ def texto(doc, ahora):
             out.append("  %s" % doc["nota_tamano"])
     else:
         out.append("Mi tamaño: %s" % doc["nota_tamano"])
-    if doc["hora_limite"]:
+    if doc.get("tipo_cuenta") == "propia":
+        out.append("Hora límite: ninguna, es tu cuenta · plano a las %s" % _doble(doc["plano_a"], fecha, zona))
+    elif doc["hora_limite"]:
         if doc["hora_limite_ny"]:
             lim = _doble(doc["hora_limite_ny"], fecha, zona)
             if doc["hora_limite_tz"] not in ("America/New_York", None, ""):
@@ -474,7 +583,7 @@ def texto(doc, ahora):
     else:
         out.append("Hora límite de mi firma: sin config no la conozco · plano a las %s" % _doble(doc["plano_a"], fecha, zona))
     out.append("Franjas del día (%s):" % ("NY / Madrid" if madrid else "NY"))
-    if doc["mercado"] in ("ES", "NQ"):
+    if doc["mercado"] in ("ES", "NQ") or accion:
         for nombre, d, h, que in FRANJAS_INDICES:
             rango = "%s–%s" % (d, h)
             if madrid:
@@ -549,8 +658,8 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd")
     sp = sub.add_parser("plan", help="el plan de sesión escrito")
-    sp.add_argument("--mercado", help="ES, NQ, CL o GC (por defecto el de kemet/config.json, y si no hay, NQ)")
-    sp.add_argument("--stop", type=float, help="tu stop en puntos del contrato, para el tamaño")
+    sp.add_argument("--mercado", help="ES, NQ, CL, GC… o un ticker de EE. UU. (por defecto el de kemet/config.json, y si no hay, NQ)")
+    sp.add_argument("--stop", type=float, help="tu stop en puntos del contrato (o en dólares por acción), para el tamaño")
     sp.add_argument("--drawdown", type=float, help="drawdown de la cuenta en dólares, si no hay config")
     sp.add_argument("--diario", type=float, help="límite diario de la firma en dólares, si lo tiene")
     sp.add_argument("--semaforo", choices=["verde", "ambar", "rojo"], help="fuerza el semáforo del día")

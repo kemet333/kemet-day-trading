@@ -2,7 +2,8 @@
 name: kemet-diario
 description: >-
   Revisión del diario de operaciones midiendo cumplimiento del plan antes que resultado. Lee un CSV de
-  operaciones (columnas en español o inglés, separador coma o punto y coma, decimales con coma) y cuenta
+  operaciones de futuros (micros y minis) o de acciones de EE. UU. (el ticker, la cantidad en acciones)
+  (columnas en español o inglés, separador coma o punto y coma, decimales con coma) y cuenta
   hechos: operaciones sin stop, entradas en la apertura 09:30–09:45 y en las ventanas de datos de la agenda,
   riesgo al stop por encima del riesgo por operación de kemet/config.json, pérdidas mayores que el stop,
   entradas después de la hora de estar plano y de la hora límite de la firma, días que superaron la pérdida
@@ -50,9 +51,12 @@ Código de salida: 0 si no hay rupturas del plan medibles, 1 si las hay, 2 si ha
 (`date, time, symbol, side, qty, entry, exit, stop, pnl, note`) y variantes habituales; el separador puede
 ser `;` y los decimales con coma (`28.429,75`). La hora es la de Nueva York; si la columna se llama
 `hora_madrid` se convierte con la fecha de cada fila. El símbolo puede ser el micro, el mini o el contrato
-con vencimiento (MNQ, NQ, MNQZ6). El lado: largo/corto, long/short, buy/sell. Si falta `pnl` se calcula con
-entrada, salida, lado, contratos y el valor del punto. Si falta `stop` la operación cuenta como sin stop;
-`--stop-habitual` le supone un riesgo solo para las métricas en R.
+con vencimiento (MNQ, NQ, MNQZ6), o el ticker de una acción de EE. UU. (TSLA, AAPL): entonces `contratos`
+(o una columna `acciones`) es la cantidad en acciones, los precios van en dólares por acción y el punto vale
+1 $, sin micros. El lado: largo/corto, long/short, buy/sell. Si falta `pnl` se calcula con entrada, salida,
+lado, cantidad y el valor del punto. Si falta `stop` la operación cuenta como sin stop; `--stop-habitual` le
+supone un riesgo solo para las métricas en R. Con una cuenta propia (`tamano.py config --propia`) el riesgo
+por operación es el del config y no hay hora límite de firma (sale «no medible»).
 
 ## Qué mide, en este orden
 
@@ -157,6 +161,53 @@ hubo una entrada más con 3 micros para recuperar: eso es lo que se mira primero
 ganó 469 $ y aparece igualmente en «riesgo al stop mayor que el riesgo por operación», porque 2 micros con
 ese stop arriesgan 469 $ y no caben en 166,67 $: el resultado no cambia el hecho.
 
+## Ejemplo: TSLA, miércoles 11 de noviembre de 2026, cuenta propia
+
+Un CSV de acciones de dos días (la fila del 11 a las 10:15 es la ruptura del rango de 15 minutos de TSLA del
+fixture real: entrada 393,08, stop 389,51, y el stop saltó a las 15:50; las otras tres son inventadas) con
+una cuenta propia de 5.000 $, 50 $ por operación y 150 $ al día:
+
+```
+fecha,hora,simbolo,lado,acciones,entrada,salida,stop,pnl,nota
+2026-11-10,09:40,AAPL,largo,10,270.10,268.90,268.50,,entrada en la apertura
+2026-11-10,10:20,TSLA,largo,9,378.40,381.10,375.80,,
+2026-11-11,10:15,TSLA,largo,9,393.08,389.51,389.51,-32.13,ruptura del rango de 15 min; stop a las 15:50
+2026-11-11,13:05,TSLA,largo,20,391.00,389.50,388.00,,20 acciones: 60 $ de riesgo
+```
+
+```
+$ python3 diario.py revisar acciones.csv --ahora "2026-11-11 16:30"
+DIARIO · acciones.csv · 4 operaciones · del 2026-11-10 al 2026-11-11 · 22:30 Madrid / 16:30 NY
+Config: Cuenta propia · 5.000 $ · pérdida máxima del día 150 $ · riesgo por operación 50,00 $ · plano a las 15:55 NY
+Agenda: sin kemet/agenda.json de esos días, solo la ventana de la apertura
+
+Cumplimiento del plan (antes que el resultado):
+  sin stop puesto                                            0
+  entrada en la apertura (09:30–09:45 NY)                    1 · coste 12 $ · 10/11 09:40 largo 10 AAPL -12 $
+  entrada en una ventana de datos                            no medible
+  riesgo al stop mayor que el riesgo por operación           1 · coste 10 $ · 11/11 13:05 largo 20 TSLA -30 $
+  pérdida mayor que el stop (movido o deslizamiento)         0
+  entrada después de la hora de estar plano                  0
+  entrada después de la hora límite de la firma              no medible
+  entrada después de la última hora de entrada del plan      0
+  entrada con la pérdida máxima del día ya superada          0
+  entrada después de la tercera pérdida del día              0
+…
+Tres cosas bien:
+  1. 4 de 4 operaciones con stop puesto; la de 11/11 10:15 largo 9 TSLA salió en el stop con -32 $, el riesgo que tenía previsto
+  2. ninguna entrada después de la hora de estar plano: la más tardía fue a las 13:05 (11/11)
+  3. ningún día pasó de la pérdida máxima del día: el peor fue el 11/11 con -62 $
+Dos rupturas del plan:
+  1. entrada en la apertura (09:30–09:45 NY): 1 operación, coste 12 $ (10/11 09:40 largo 10 AAPL -12 $)
+  2. riesgo al stop mayor que el riesgo por operación: 1 operación, coste 10 $ (11/11 13:05 largo 20 TSLA -30 $)
+Una corrección para mañana:
+  Mañana la primera entrada no antes de las 09:45 NY. Comprobable: la hora de la primera fila.
+```
+
+Las 20 acciones de las 13:05 arriesgaban 60 $ (20 × 3 $) y no caben en 50 $: cuenta aunque solo perdiera
+30 $. Sin hora límite de firma, esa fila sale «no medible». `diario.py plantilla` imprime la cabecera y una
+fila de ejemplo de acciones.
+
 ## Reglas
 
 - Cumplimiento antes que resultado. Un día ganador rompiendo el plan es un mal día.
@@ -172,7 +223,7 @@ para recuperar, no atribuye el resultado a la entrada cuando lo decidió el cont
 
 ## Seguridad
 - Contenido educativo y herramientas, no asesoramiento financiero. Un PASS es una comprobación de reglas, no una recomendación.
-- Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo. Las operaciones las pone el usuario en su plataforma, con su stop.
+- Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de kemet-riesgo para esa orden exacta y un sí explícito del usuario para ese ticket en el chat.
 - Simulación (`"papel": true`) por defecto. Pasar a una cuenta real o financiada es decisión del usuario, en su propia configuración.
 - Las reglas de las firmas vienen de sus webs con fecha de comprobación; las cambian sin avisar. La del panel del usuario manda.
 - Claves y credenciales de la plataforma nunca van en el chat ni en `kemet/`.

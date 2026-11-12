@@ -1,17 +1,19 @@
 ---
 name: kemet-alertas
 description: >-
-  Alertas de precio y de hora con el reloj de Globex. Convierte el plan de kemet-salida en tres alertas de una vez
-  (el stop, el objetivo y «plano a» a tu hora), añade niveles por encima o por debajo, movimientos en porcentaje
-  sobre el cierre de la sesión regular anterior, cualquier hora del día, la apertura de la sesión regular del
-  contrato y un aviso cinco minutos antes de la hora límite de tu firma; cada una suena una sola vez. Sabe cuándo
-  está abierto CME Globex (domingo 18:00 a viernes 17:00 NY, pausa diaria de 17:00 a 18:00, festivos y sesiones
-  recortadas de 2026 y 2027), calcula la hora de Nueva York y la de Madrid sin zonas horarias del sistema, lee el
-  último cierre de Yahoo (vela de 1 minuto si la hay, si no de 5) y escribe kemet/precios.json. Úsala cuando el
-  usuario diga «avísame cuando», «ponme las alertas», «vigila mi stop», «recuérdame cerrar a las 15:55», «a qué hora
-  tengo que estar plano», «está abierto el mercado», «dame el precio», o justo después de que kemet-salida escriba
-  un plan. Mientras la operación está abierta; antes, kemet-tamano y kemet-riesgo.
-argument-hint: "[reloj | add --desde-plan | check | quote NQ]"
+  Alertas de precio y de hora con el reloj de Globex (futuros) y el de la NYSE (acciones de EE. UU.). Convierte el
+  plan de kemet-salida en tres alertas de una vez (el stop, el objetivo y «plano a» a tu hora), añade niveles por
+  encima o por debajo, movimientos en porcentaje sobre el cierre de la sesión regular anterior, cualquier hora del
+  día, la apertura de la sesión regular del contrato (el campanazo de las 09:30 en una acción) y un aviso cinco
+  minutos antes de la hora límite de tu firma; cada una suena una sola vez. Sabe cuándo está abierto CME Globex
+  (domingo 18:00 a viernes 17:00 NY, pausa diaria de 17:00 a 18:00, festivos y sesiones recortadas de 2026 y 2027) y
+  cuándo la NYSE (09:30 a 16:00 NY, festivos, 13:00 en los días recortados), calcula la hora de Nueva York y la de
+  Madrid sin zonas horarias del sistema, lee el último cierre de Yahoo (vela de 1 minuto si la hay, si no de 5) de
+  un futuro o de una acción y escribe kemet/precios.json. Úsala cuando el usuario diga «avísame cuando», «ponme las
+  alertas», «vigila mi stop», «recuérdame cerrar a las 15:55», «a qué hora tengo que estar plano», «está abierto el
+  mercado», «abre la bolsa», «dame el precio», «cuánto vale TSLA», o justo después de que kemet-salida escriba un
+  plan. Mientras la operación está abierta; antes, kemet-tamano y kemet-riesgo.
+argument-hint: "[reloj | add --desde-plan | add --apertura | check | quote NQ|TSLA]"
 ---
 
 # kemet-alertas
@@ -37,11 +39,15 @@ python3 "${CLAUDE_SKILL_DIR}/alertas.py" check                              # c�
 python3 "${CLAUDE_SKILL_DIR}/alertas.py" quote NQ --escribir                # -> kemet/precios.json
 python3 "${CLAUDE_SKILL_DIR}/alertas.py" list
 python3 "${CLAUDE_SKILL_DIR}/alertas.py" reset nq-plan-stop
+python3 "${CLAUDE_SKILL_DIR}/alertas.py" reloj --mercado TSLA               # el reloj de la NYSE
+python3 "${CLAUDE_SKILL_DIR}/alertas.py" add --simbolo TSLA --apertura      # el campanazo de las 09:30 NY, una vez por día
+python3 "${CLAUDE_SKILL_DIR}/alertas.py" quote TSLA --escribir              # el último cierre de una acción
 ```
 
 `--ahora "2026-11-11 15:55"` fija el reloj (hora de Nueva York); `--offline RUTA` lee un JSON de Yahoo guardado o
-la carpeta `tests/fixtures/yahoo` en vez de la red; `--mercado ES|NQ|CL|GC` elige el contrato del reloj (por defecto
-el de `kemet/config.json`, si no NQ). `--simbolo` acepta el contrato o su micro (MNQ, MES, MCL, MGC).
+la carpeta `tests/fixtures/yahoo` en vez de la red; `--mercado ES|NQ|CL|GC|TSLA` elige el instrumento del reloj (por
+defecto el de `kemet/config.json`, si no NQ): con un futuro, Globex; con una acción, la NYSE. `--simbolo` acepta el
+contrato, su micro (MNQ, MES, MCL, MGC) o un ticker de acciones de EE. UU. (TSLA, `BRK.B`).
 
 ## Qué lee y escribe
 
@@ -51,7 +57,7 @@ el de `kemet/config.json`, si no NQ). `--simbolo` acepta el contrato o su micro 
 | `kemet/config.json` | el mercado, `plano_a`, `hora_limite` y `hora_limite_tz` de la firma, el nombre de la cuenta |
 | `kemet/alertas.json` | las reglas (`alertas.example.json` en esta carpeta) |
 | `kemet/estado/alertas.json` | qué regla sonó y cuándo, para que cada una suene una vez |
-| `kemet/precios.json` | `{"generado", "precios": {"NQ": {"precio", "hora_vela", "intervalo", "retraso_min", "cierre_anterior"}}}`, para kemet-tamano y kemet-riesgo |
+| `kemet/precios.json` | `{"generado", "precios": {"NQ": {"precio", "hora_vela", "intervalo", "retraso_min", "cierre_anterior"}}}`, futuros y acciones por su símbolo, para kemet-tamano y kemet-riesgo |
 
 ## Tipos de regla
 
@@ -64,7 +70,7 @@ el de `kemet/config.json`, si no NQ). `--simbolo` acepta el contrato o su micro 
 | `pct` | se ha movido `pct` por ciento o más desde el cierre de la sesión regular anterior; `direccion` sube o baja | una vez al día como mucho |
 | `hora` | el reloj de Nueva York pasó `a` («15:55»); con `fecha`, solo ese día | una vez por día |
 | `hora_limite` | faltan 5 minutos para la hora límite de la firma de `kemet/config.json`, convertida a Nueva York (Topstep la publica en hora de Chicago) | una vez por día |
-| `apertura` | abrió la sesión regular del contrato: 09:30 NY en ES y NQ, 09:00 en CL, 08:20 en GC | una vez por día de negociación |
+| `apertura` | abrió la sesión regular del contrato: 09:30 NY en ES y NQ, 09:00 en CL, 08:20 en GC; en una acción, el campanazo de la NYSE a las 09:30 | una vez por día de negociación |
 
 Una regla con `fecha` solo se vigila ese día de Nueva York; las de `--desde-plan` llevan la fecha del plan, así que
 el stop de ayer no suena hoy. Las reglas de hora no suenan los sábados ni en los festivos de cierre completo. En una
@@ -92,6 +98,16 @@ verano de Nueva York y el de Madrid se calculan dentro de la herramienta: no dep
 
 `reloj` devuelve código 0 si Globex está abierto y 1 si está en pausa o cerrado, y dice en qué punto de la sesión
 regular del contrato estás, tu `plano_a` y la hora límite de tu firma en hora de Nueva York.
+
+## El reloj de la NYSE
+
+Con una acción (`--mercado TSLA`, o una regla con `simbolo` TSLA) el reloj es el de la NYSE: abierta de 09:30 a
+16:00 NY de lunes a viernes, cerrada los festivos (Thanksgiving, Navidad, Año Nuevo, Martin Luther King, Presidents
+Day, Viernes Santo, Memorial Day, Juneteenth, 4 de julio, Labor Day) y con cierre a las 13:00 el día después de
+Thanksgiving y en Nochebuena. No hay pausa diaria ni sesión nocturna; fuera de horas está cerrada y dice la próxima
+apertura. Una acción no tiene hora límite de firma: `add --hora-limite` con `--simbolo TSLA` se rechaza; el aviso de
+cerrar es `plano a` (15:55, o 12:55 en un día recortado) y la alerta de apertura es el campanazo de las 09:30, una
+vez por día. Los precios van al céntimo.
 
 ## Pasos
 
@@ -160,6 +176,59 @@ Escrito kemet/precios.json con 1 precio(s).
 Al día siguiente las tres alertas del plan ya no se vigilan; la apertura vuelve a sonar a las 09:30. Un viernes a las
 17:30 el reloj dice cerrado y da la próxima apertura, el domingo a las 18:00; un martes a esa hora dice en pausa.
 
+## Ejemplo: TSLA, miércoles 11 de noviembre de 2026
+
+Una acción, con el fixture real `TSLA-60d-5m.json.gz`. Plan de kemet-salida: largo en 393,08 a las 10:15, stop 389,51,
+objetivo 396,65, plano a las 15:55. `add --simbolo TSLA --apertura` escribe `apertura-tsla`; `add --desde-plan`,
+`tsla-plan-stop`, `tsla-plan-objetivo` y `tsla-plano-a` para ese día. Con `--mercado TSLA --offline
+tests/fixtures/yahoo`, a las 10:20 solo suena el campanazo:
+
+```
+NYSE abierta (16:20 Madrid / 10:20 NY, sesión regular).
+ALERTA Campanazo de apertura de la NYSE para TSLA: 09:30 NY (15:30 Madrid).
+Una alerta es información, no una orden. El stop que te saca es el que tienes puesto en tu plataforma; si ha saltado, apunta el resultado con kemet-riesgo registrar.
+```
+
+A las 11:00 la vela de 10:55 ha cerrado en 395,12, a 1,53 $ del objetivo, y nada suena:
+
+```
+NYSE abierta (17:00 Madrid / 11:00 NY, sesión regular).
+Nada ha sonado. 4 regla(s) vigilada(s) hoy, TSLA 395,12 (vela de 5 m de las 10:55, cerrada a las 11:00, retraso 0 min).
+```
+
+A las 15:55 la vela de 15:50 ha cerrado en 388,93, por debajo del stop, y es la hora de estar plano:
+
+```
+NYSE abierta (21:55 Madrid / 15:55 NY, sesión regular).
+ALERTA TSLA último 388,93 (vela de 5 m de las 15:50, cerrada a las 15:55, retraso 0 min): en o por debajo de tu stop 389,51 (stop del plan, ib-medio).
+ALERTA Plano a: son las 15:55 NY (fijado a las 15:55). Si TSLA sigue abierta, ciérrala en tu plataforma.
+Una alerta es información, no una orden. El stop que te saca es el que tienes puesto en tu plataforma; si ha saltado, apunta el resultado con kemet-riesgo registrar.
+```
+
+El reloj en el festivo y en el día recortado (`reloj --mercado TSLA --ahora "2026-11-26 11:00"` y `"2026-11-27 11:00"`):
+
+```
+Reloj de la NYSE: 17:00 Madrid / 11:00 NY, jueves 26/11/2026. NYSE CERRADA (Thanksgiving).
+Sesión regular de TSLA: 09:30 a 16:00 NY.
+Próxima apertura de la NYSE: 27/11/2026 09:30 NY.
+```
+
+```
+Reloj de la NYSE: 17:00 Madrid / 11:00 NY, viernes 27/11/2026. NYSE ABIERTA (sesión recortada: Día después de Thanksgiving).
+Sesión regular de TSLA: 09:30 a 13:00 NY, en sesión regular (recortada: Día después de Thanksgiving).
+La NYSE cierra hoy a las 13:00 NY. Una acción no tiene hora límite de firma.
+```
+
+El precio a las 10:00 (`quote TSLA --ahora "2026-11-11 10:00"`):
+
+```
+Precios a las 16:00 Madrid / 10:00 NY.
+TSLA último 389,81 (vela de 5 m de las 09:55, cerrada a las 10:00, retraso 0 min), +2,64 % sobre el cierre regular del 10/11/2026 (379,80).
+El cierre de Yahoo puede ir con retraso: vale para alertas, no para cronometrar una orden. El precio que te llena es el de tu plataforma.
+```
+
+Al día siguiente el campanazo vuelve a sonar a las 09:30 y las tres alertas del plan ya no se vigilan.
+
 ## Reglas
 
 - Una alerta es un hecho sobre un precio o sobre el reloj. Se cuenta como un hecho.
@@ -175,7 +244,7 @@ precio.
 
 ## Seguridad
 - Contenido educativo y herramientas, no asesoramiento financiero. Un PASS es una comprobación de reglas, no una recomendación.
-- Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo. Las operaciones las pone el usuario en su plataforma, con su stop.
+- Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de kemet-riesgo para esa orden exacta y un sí explícito del usuario para ese ticket en el chat.
 - Simulación (`"papel": true`) por defecto. Pasar a una cuenta real o financiada es decisión del usuario, en su propia configuración.
 - Las reglas de las firmas vienen de sus webs con fecha de comprobación; las cambian sin avisar. La del panel del usuario manda.
 - Claves y credenciales de la plataforma nunca van en el chat ni en `kemet/`.

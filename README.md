@@ -1,21 +1,26 @@
 # Kemet Day Trading
 
-Once skills de Claude para day trading de futuros en cuentas de fondeo: los niveles de la sesión, el plan
-escrito, la ruptura del balance inicial vela a vela, el stop y el objetivo antes de entrar, una máquina del tiempo que repite
-el resto de la sesión 10.000 veces, el tamaño y el riesgo con las reglas de tu firma, las alertas, el diario y
-la geometría que decide qué cuenta comprar.
+Dieciséis skills que convierten a Claude en tu equipo de trading: escanea miles de gráficos, vigila noticias y
+filings, lee resultados, sigue las operaciones del Congreso, marca los niveles de la sesión, escribe el plan, vigila
+la ruptura del rango vela a vela, pone el stop y el objetivo antes de entrar, repite el resto del día 10.000 veces
+antes de arriesgar nada, calcula el tamaño y el riesgo con tus reglas, manda la orden a un bróker en papel solo
+con tu sí, avisa, revisa el diario y decide qué cuenta de fondeo comprar.
 
-Gratis, MIT, sin registro, sin clave de API. Las herramientas son Python estándar que lee datos públicos
-gratuitos (velas de Yahoo Finance de ES, NQ, CL y GC) y las reglas publicadas de Topstep, Apex, Tradeify,
+Acciones de EE. UU. y futuros (ES, NQ, YM, RTY, CL, GC, SI, HG, NG, 6E, ZN, ZB). Gratis, MIT, sin registro, sin
+clave de API. Las herramientas son Python estándar que lee datos públicos gratuitos (velas de Yahoo Finance, los
+listados de Nasdaq Trader, EDGAR de la SEC, el House Clerk) y las reglas publicadas de Topstep, Apex, Tradeify,
 Alpha Futures y Lucid, con fecha de comprobación.
 
-Nada de este pack envía órdenes. Las operaciones las pone el usuario en su plataforma, con su stop. Y la regla
-de entrada que trae es la didáctica, sin filtro: la máquina del tiempo enseña lo que habría hecho antes, y muchas
-veces es un coin flip. La mayoría de los que hacen day trading pierde dinero, y una herramienta no cambia eso.
+Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de
+kemet-riesgo para esa orden exacta y un sí explícito tuyo para ese ticket. La regla de entrada que trae es la
+didáctica, sin filtro: la máquina del tiempo enseña lo que habría hecho antes, y muchas veces es un coin flip. La
+mayoría de los que hacen day trading pierde dinero, y una herramienta no cambia eso.
 
 Hecho por [Kemet Capital](https://kemet-capital.com). Los sistemas que Kemet opera con agentes en cuentas de
-fondeo llevan filtros y parámetros validados en su propio banco; no están en este pack: esto es el desk, abierto. La arquitectura sigue la de [The Day Trader skill](https://github.com/Jakeschincariol/day-trader-skill)
-de Jake Schincariol (MIT), que es para acciones de EE. UU.; esta es para futuros y prop firms, en español.
+fondeo llevan filtros y parámetros validados en su propio banco; no están en este pack: esto es el equipo, abierto.
+La arquitectura sigue la de [The Day Trader skill](https://github.com/Jakeschincariol/day-trader-skill)
+de Jake Schincariol (MIT): todo lo que hace aquel está aquí, en español, más futuros, prop firms, plan, diario y
+geometría de riesgo.
 
 ## Instalar
 
@@ -49,34 +54,42 @@ de un chat y funciona como método; pierdes las herramientas de Python, no las r
 
 Hace falta Python 3.8 o más nuevo. Nada que instalar con pip. Funciona en Mac, Linux y Windows.
 
-## Las once
+## Las dieciséis
 
 | comando | qué es | qué hace |
 | --- | --- | --- |
-| `/kemet-desk` | El desk | Te sitúa (mercado, firma, cuenta, stop, horario), elige la pieza y las encadena en orden. |
+| `/kemet-desk` | El desk | Te sitúa (mercado, cuenta, stop, horario), elige la pieza y las encadena en orden. |
+| `/kemet-scanner` | Scanner | Barre miles de acciones (universo de Nasdaq Trader) antes de abrir y a las 10:15, y los doce futuros: qué rompió, qué está sobre el máximo de ayer. |
+| `/kemet-noticias` | Noticias | Titulares y filings 8-K por ticker con hora y etiqueta, y la agenda macro del día, en un solo sitio. |
 | `/kemet-niveles` | Niveles | Máximo, mínimo y cierre de ayer, rango nocturno, apertura y balance inicial, y dónde está el precio. |
 | `/kemet-plan` | Plan de sesión | El plan escrito: franjas, ventanas de datos en las que no se opera, semáforo, niveles, tamaño, hora límite de tu firma. |
 | `/kemet-entrada` | Entrada | La ruptura del balance inicial vela a vela: formando, esperando, disparado o caducado. |
 | `/kemet-salida` | Salida | Stop y objetivo antes de entrar, al tick, en puntos y en dólares por micro. |
 | `/kemet-maquina` | Máquina del tiempo | Repite el resto de la sesión 10.000 veces con las velas del propio contrato y repasa la historia real de la regla. |
-| `/kemet-tamano` | Tamaño | Tu cuenta desde las reglas de la firma y cuántos micros caben con tu stop en tu límite del día. |
+| `/kemet-tamano` | Tamaño | Tu cuenta (una firma de fondeo o tu propio presupuesto) y cuántos micros o acciones caben con tu stop en tu límite del día. |
 | `/kemet-riesgo` | Riesgo | PASS o BLOCK por orden: stop, pérdida, límite del día, tres fallos y paras, ventanas, hora límite, Globex. |
 | `/kemet-alertas` | Alertas | Stop, objetivo, plano a, la hora límite de tu firma y el reloj de Globex, cada una suena una vez. |
 | `/kemet-diario` | Diario | Revisión del CSV de operaciones: cumplimiento del plan antes que resultado, tres bien, dos mal, una corrección. |
-| `/kemet-geometria` | Geometría | Qué cuenta comprar, cuánto arriesgar y cuándo retirar, con el estudio de 76 cuentas. |
+| `/kemet-broker` | Bróker | Convierte la orden con PASS en un ticket en palabras llanas; con tu sí, Claude la manda a Alpaca en papel. Futuros, a mano en tu plataforma. |
+| `/kemet-resultados` | Resultados | Lee los XBRL de la SEC: trimestres, ingresos, beneficio, BPA, márgenes y cuándo toca el próximo informe. |
+| `/kemet-congreso` | Congreso | Las declaraciones de operaciones de los congresistas (STOCK Act), el día que se publican. Un gancho, no una estrategia. |
+| `/kemet-geometria` | Geometría | Qué cuenta de fondeo comprar, cuánto arriesgar y cuándo retirar, con el estudio de 76 cuentas. |
 
 ## Cómo se usa
 
 Todo cae en una carpeta `kemet/` de tu proyecto y cada skill lee lo que escribió la anterior:
 
 ```
-niveles -> plan                                      (antes de abrir)
-entrada -> salida -> maquina -> tamano -> riesgo     (una operación)
-alertas                                              (mientras está abierta)
-riesgo registrar -> diario                           (después)
+scanner -> noticias -> niveles -> plan                          (antes de abrir)
+entrada -> salida -> maquina -> tamano -> riesgo -> broker      (una operación)
+alertas                                                         (mientras está abierta)
+riesgo registrar -> diario                                      (después)
+noticias / resultados / congreso                                (cuando toque)
 ```
 
-Un ejemplo con datos reales: NQ, miércoles 11 de noviembre de 2026.
+Un ejemplo con datos reales: NQ, miércoles 11 de noviembre de 2026. (Con una acción el camino es el mismo: el
+scanner la encuentra, la entrada vigila su rango de apertura de 15 minutos, el tamaño sale en acciones enteras
+contra tu presupuesto y el bróker la manda en papel con tu sí. TSLA ese mismo día está en los SKILL.md.)
 
 1. **`/kemet-tamano`**, una vez: `tamano.py config --firma apex --cuenta eod-pa-150 --mercado NQ` escribe
    tu cuenta con sus reglas y la regla Kemet del día (un cuarto del drawdown; la mitad en ámbar).
@@ -110,6 +123,11 @@ reintento en un 429). `--ahora "2026-11-11 10:35"` fija el reloj en hora de Nuev
 `--offline ARCHIVO` lee velas guardadas; `--json` da el documento entero; `--escribir` guarda en `kemet/`.
 
 ```bash
+python3 kemet-scanner/scanner.py universo                              # -> kemet/universo.txt (unas 5.900 acciones)
+python3 kemet-scanner/scanner.py diario                                # antes de abrir -> kemet/watchlist.json
+python3 kemet-scanner/scanner.py orb --a 10:15                         # rupturas del rango de apertura
+python3 kemet-scanner/scanner.py futuros                               # los doce contratos
+python3 kemet-noticias/noticias.py --tickers TSLA --horas 12           # titulares, 8-K y la agenda macro
 python3 kemet-niveles/niveles.py --mercado NQ --escribir             # -> kemet/niveles.json
 python3 kemet-plan/plan.py agenda --dato "08:30 IPC fuerte"            # -> kemet/agenda.json
 python3 kemet-plan/plan.py plan --stop 18 --escribir                   # -> kemet/plan-sesion.json
@@ -117,11 +135,16 @@ python3 kemet-entrada/entrada.py check --escribir                      # -> keme
 python3 kemet-entrada/entrada.py watch --hasta 15:00                   # vela a vela hasta el disparo
 python3 kemet-salida/salida.py plan --escribir                         # -> kemet/plan.json
 python3 kemet-maquina/maquina.py run --escribir                        # 10.000 repeticiones + la historia
-python3 kemet-tamano/tamano.py config --firma apex --cuenta eod-pa-150 # -> kemet/config.json
+python3 kemet-tamano/tamano.py config --firma apex --cuenta eod-pa-150 # -> kemet/config.json (cuenta de firma)
+python3 kemet-tamano/tamano.py config --propia --presupuesto 5000 --max-perdida-operacion 50 --max-perdida-dia 150
 python3 kemet-tamano/tamano.py calc --stop 18                          # cuántos micros caben
 python3 kemet-tamano/tamano.py orden --escribir                        # -> kemet/orden.json
 python3 kemet-riesgo/riesgo.py check                                   # PASS / BLOCK por orden
+python3 kemet-broker/broker.py mostrar                                 # el ticket, LISTO solo con PASS de hoy
+python3 kemet-broker/broker.py registrar --huella H --id-broker ID --precio P
 python3 kemet-riesgo/riesgo.py registrar --resultado -120              # apunta el resultado
+python3 kemet-resultados/resultados.py AAPL --trimestres 8             # trimestres, márgenes, BPA
+python3 kemet-congreso/congreso.py recientes --dias 45 --miembro pelosi
 python3 kemet-alertas/alertas.py add --desde-plan                      # stop, objetivo, plano a
 python3 kemet-alertas/alertas.py check                                 # suena lo que tocó, una vez
 python3 kemet-diario/diario.py revisar operaciones.csv                 # la revisión
@@ -131,8 +154,10 @@ python3 kemet-diario/diario.py revisar operaciones.csv                 # la revi
 python3 -m unittest discover -s tests -v
 ```
 
-Los tests van sin red, sobre velas reales de Yahoo guardadas (NQ y ES de 5 minutos, 60 días hasta el 12 de
-noviembre de 2026; CL y GC, 5 días) y reproducen las cifras de los ejemplos.
+Los tests van sin red, sobre datos reales guardados (velas de Yahoo de NQ, ES y TSLA de 5 minutos, 60 días hasta
+el 12 de noviembre de 2026; CL, GC y AAPL, 5 días; la pared de 234 gráficos del 19 de octubre, los listados de
+Nasdaq Trader, los XBRL de Apple y Coca-Cola y los PTR del House Clerk del pack de referencia) y reproducen las
+cifras de los ejemplos.
 
 ## Letra pequeña
 
@@ -140,9 +165,15 @@ noviembre de 2026; CL y GC, 5 días) y reproducen las cifras de los ejemplos.
 situación y no ve el futuro. La mayoría de los que hacen day trading pierde dinero. Puedes perder dinero, y
 pagar evaluaciones que no apruebes. Decide tú y, si necesitas consejo, busca a un profesional con licencia.
 
-**Nada envía órdenes.** Ninguna skill de este pack habla con un bróker ni con una firma de fondeo. Un PASS de
-`/kemet-riesgo` es una comprobación de reglas; la orden la pones tú. Kemet Capital opera con agentes, en su
-plataforma, sistemas con filtros y parámetros validados en su propio banco; eso es otro producto y no está aquí.
+**Ninguna orden sin tu sí.** Solo `/kemet-broker` puede llevar a una orden, y solo después de que `/kemet-riesgo`
+pase esa orden exacta y tú escribas sí para ese ticket en el chat. Pon la herramienta del bróker en «Necesita
+aprobación» en Claude, nunca en «Permitir siempre», para que la tarjeta de Claude sea un segundo control. Cuenta
+papel por defecto (`"papel": true`); las claves van en variables de entorno, nunca en el chat. En futuros no hay
+conector gratuito: la operación la pones tú en tu plataforma. Kemet Capital opera con agentes, en su plataforma,
+sistemas con filtros y parámetros validados en su propio banco; eso es otro producto y no está aquí.
+
+**Las operaciones del Congreso son públicas, no información privilegiada.** Los congresistas declaran sus
+operaciones de más de 1.000 dólares hasta 45 días después (STOCK Act). `/kemet-congreso` lee esas declaraciones.
 
 **La máquina del tiempo es una simulación, no una predicción.** Se construye con las velas de 5 minutos del
 propio contrato en las sesiones anteriores (Yahoo guarda unas 48). El futuro hace cosas que esas sesiones no
@@ -154,7 +185,8 @@ precio. La pérdida máxima que se muestra es la del precio del stop.
 
 **Los datos son gratuitos y no oficiales.** El endpoint de gráficos de Yahoo no es una API oficial: los
 futuros llegan con unos 10 minutos de retraso, puede fallar o limitarte. Las velas son de 5 minutos, nunca tick a
-tick. Comprueba en tu plataforma cualquier cifra que importe antes de actuar.
+tick. EDGAR y el House Clerk piden que te identifiques (`sec_user_agent` en `kemet/config.json`). Comprueba en tu
+plataforma cualquier cifra que importe antes de actuar.
 
 **Las reglas de las firmas cambian.** Vienen de sus webs con fecha de comprobación; la de tu panel manda.
 Confírmalas antes de pagar y antes de cada retiro.
@@ -167,6 +199,8 @@ ver en la máquina del tiempo lo que habría hecho en las sesiones anteriores. N
 
 ```
 kemet-desk/        SKILL.md, references/ (plan de sesión, revisión)
+kemet-scanner/     SKILL.md, scanner.py
+kemet-noticias/    SKILL.md, noticias.py
 kemet-niveles/     SKILL.md, niveles.py
 kemet-plan/        SKILL.md, plan.py, agenda.example.json
 kemet-entrada/     SKILL.md, entrada.py
@@ -175,13 +209,16 @@ kemet-maquina/     SKILL.md, maquina.py
 kemet-tamano/      SKILL.md, tamano.py, reglas-de-firmas.json, reglas-de-firmas.md, config.example.json
 kemet-riesgo/      SKILL.md, riesgo.py
 kemet-alertas/     SKILL.md, alertas.py, alertas.example.json
+kemet-broker/      SKILL.md, broker.py, claude_desktop_config.example.json
 kemet-diario/      SKILL.md, diario.py, diario.example.csv
+kemet-resultados/  SKILL.md, resultados.py, metricas.example.json
+kemet-congreso/    SKILL.md, congreso.py
 kemet-geometria/   SKILL.md, geometria-de-riesgo.md
 tests/             unittest + fixtures reales de Yahoo
 ```
 
 Cada carpeta con herramienta lleva su copia de `comun.py` (horas de Nueva York y Madrid sin zoneinfo, velas de
-Yahoo, el día de negociación de CME, contratos y micros, el reloj de Globex, los archivos de `kemet/`), para que
-cada skill se instale sola.
+Yahoo, el día de negociación de CME, contratos y micros, acciones por su ticker, los relojes de Globex y de la
+NYSE, los archivos de `kemet/`), para que cada skill se instale sola.
 
 MIT. Hecho por [Kemet Capital](https://kemet-capital.com).

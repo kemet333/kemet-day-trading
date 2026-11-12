@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Alertas de precio y de hora con el reloj de Globex, para kemet-alertas. Solo biblioteca estándar.
+"""Alertas de precio y de hora con el reloj de Globex (futuros) y el de la NYSE (acciones de EE. UU.), para kemet-alertas.
+Solo biblioteca estándar.
 
     python3 alertas.py reloj                            # Globex abierto, en pausa o cerrado; la sesión regular de tu contrato
     python3 alertas.py add --desde-plan                 # stop, objetivo y "plano a" de kemet/plan.json, para su fecha
@@ -15,6 +16,9 @@
     python3 alertas.py quote NQ --escribir              # el último cierre de Yahoo -> kemet/precios.json
     python3 alertas.py list
     python3 alertas.py reset nq-plan-stop
+    python3 alertas.py reloj --mercado TSLA                 # el reloj de la NYSE: abierta de 09:30 a 16:00 NY, festivos, días recortados
+    python3 alertas.py add --simbolo TSLA --apertura        # el campanazo de las 09:30 NY, una vez por día
+    python3 alertas.py quote TSLA --escribir                # el último cierre de una acción -> kemet/precios.json
 
 Tipos de regla (archivo kemet/alertas.json, ejemplo en alertas.example.json):
   encima        el precio está en o por encima de "precio"
@@ -37,7 +41,9 @@ JSON guardado o la carpeta de fixtures en vez de la red.
 
 Reloj: CME Globex (comun.estado_globex): abre el domingo a las 18:00 NY, cierra el viernes a las 17:00, pausa
 diaria de 17:00 a 18:00, festivos de cierre completo y sesiones recortadas de 2026 y 2027. Fuera de esos años
-el reloj avisa de que no conoce los festivos.
+el reloj avisa de que no conoce los festivos. Con una acción (--mercado TSLA o una regla con simbolo TSLA) el reloj
+es el de la NYSE (comun.estado_nyse): abierta de 09:30 a 16:00 NY entre semana, 13:00 en los días recortados,
+cerrada los festivos; la apertura suena a las 09:30 y los precios van al céntimo.
 """
 import argparse
 import datetime as dt
@@ -62,12 +68,22 @@ def fecha_es(d):
 
 
 def codigo_de(simbolo):
-    s = str(simbolo or "").upper().strip()
-    if s in comun.CONTRATOS:
-        return s
-    if s in comun.MICRO_A_CODIGO:
-        return comun.MICRO_A_CODIGO[s]
-    raise KemetError("símbolo %r desconocido: usa %s (o el micro: MNQ, MES, MCL, MGC)" % (simbolo, "/".join(sorted(comun.CONTRATOS))))
+    """El código del instrumento: un futuro (NQ, o el micro MNQ) o un ticker de acciones de EE. UU. (TSLA, BRK.B)."""
+    return comun.resolver(simbolo)["codigo"]
+
+
+def es_accion(codigo):
+    return comun.resolver(codigo)["tipo"] == "accion"
+
+
+def nombre_reloj(codigo):
+    return "la NYSE" if es_accion(codigo) else "Globex"
+
+
+def dia_de(codigo, utc):
+    """El día de negociación de CME en un futuro; la fecha de Nueva York en una acción."""
+    ny = comun.a_ny(utc)
+    return ny.date() if es_accion(codigo) else comun.dia_negociacion(ny)
 
 
 def de_zona(local, zona):
@@ -97,38 +113,47 @@ def hora_limite_ny(cfg):
     return comun.a_ny(utc).time(), zona
 
 
-def proxima_apertura(utc):
-    """Cuándo vuelve a abrir Globex: las 18:00 NY del primer día en que a esa hora está abierto."""
+def proxima_apertura(utc, codigo=None):
+    """Cuándo vuelve a abrir: Globex a las 18:00 NY del primer día en que a esa hora está abierto; la NYSE a las 09:30 del
+    primer día de sesión (en una acción)."""
     ny = comun.a_ny(utc)
+    accion = bool(codigo) and es_accion(codigo)
+    hora = dt.time(9, 30) if accion else dt.time(18, 0)
     for i in range(0, 12):
         d = (ny + dt.timedelta(days=i)).date()
-        cand = comun.de_ny(dt.datetime.combine(d, dt.time(18, 0)))
+        cand = comun.de_ny(dt.datetime.combine(d, hora))
         if cand <= utc:
             continue
-        if comun.estado_globex(cand)[0] == "abierto":
+        if (comun.estado_nyse(cand) if accion else comun.estado_globex(cand))[0] == "abierto":
             return cand
     return None
 
 
 def estado(utc, codigo):
-    """El reloj completo: Globex, la sesión regular del contrato y lo que viene."""
+    """El reloj completo: Globex (o la NYSE en una acción), la sesión regular del instrumento y lo que viene.
+    `estado` es abierto | pausa | cerrado; `globex` lleva lo mismo en un futuro y `nyse` en una acción."""
     ny = comun.a_ny(utc)
     d = ny.date()
-    g, motivo = comun.estado_globex(utc)
-    dia = comun.dia_negociacion(ny)
+    accion = es_accion(codigo)
+    g, motivo = comun.estado_mercado(codigo, utc)
+    dia = dia_de(codigo, utc)
     o, c = comun.sesion_regular(codigo, dia)
     rth = o <= utc < c and g == "abierto"
     st = {"ahora_ny": ny.strftime("%Y-%m-%d %H:%M"), "ahora_madrid": comun.a_madrid(utc).strftime("%Y-%m-%d %H:%M"),
           "fecha": d.isoformat(), "dia_semana": DIAS[d.weekday()], "dia_negociacion": dia.isoformat(),
-          "globex": g, "motivo": motivo, "calendario_conocido": d.year in comun.CALENDARIO,
-          "mercado": codigo, "regular": rth, "regular_abre": comun.hhmm(comun.a_ny(o)), "regular_cierra": comun.hhmm(comun.a_ny(c)),
-          "recortada": comun.CME_RECORTADO.get(dia.isoformat())}
+          "reloj": "nyse" if accion else "globex", "estado": g, "motivo": motivo, "calendario_conocido": d.year in comun.CALENDARIO,
+          "mercado": codigo, "instrumento": "accion" if accion else "futuro", "regular": rth,
+          "regular_abre": comun.hhmm(comun.a_ny(o)), "regular_cierra": comun.hhmm(comun.a_ny(c)),
+          "recortada": (comun.NYSE_RECORTADO if accion else comun.CME_RECORTADO).get(dia.isoformat())}
+    st["nyse" if accion else "globex"] = g
     if g == "abierto":
         st["regular_estado"] = "en sesión regular" if rth else ("antes de la sesión regular" if utc < o else "después de la sesión regular")
     if g != "abierto":
-        p = proxima_apertura(utc)
+        p = proxima_apertura(utc, codigo)
         if p:
-            st["proxima_apertura"] = "%s 18:00" % fecha_es(comun.a_ny(p).date())
+            st["proxima_apertura"] = "%s %s" % (fecha_es(comun.a_ny(p).date()), comun.hhmm(comun.a_ny(p)))
+    elif accion:
+        st["cierra_hoy"] = st["regular_cierra"]
     elif ny.time() < dt.time(17, 0) and d.weekday() < 5:
         st["cierra_hoy"] = "17:00" if d.weekday() < 4 else "17:00 (cierre semanal)"
     return st
@@ -140,7 +165,7 @@ def _archivo_offline(offline, codigo, intervalo):
     """La ruta del archivo guardado para ese intervalo, o None. Una carpeta: <yahoo>-*-<intervalo>.json(.gz)."""
     if os.path.isfile(offline):
         return offline
-    y = comun.CONTRATOS[codigo]["yahoo"]
+    y = comun.resolver(codigo)["yahoo"]
     for patron in ("%s-*-%s.json.gz" % (y, intervalo), "%s-*-%s.json" % (y, intervalo)):
         hits = sorted(glob.glob(os.path.join(offline, patron)))
         if hits:
@@ -148,8 +173,24 @@ def _archivo_offline(offline, codigo, intervalo):
     return None
 
 
+def velas_al_tick(ch, codigo):
+    """Una acción: los precios de Yahoo (float32) redondeados al céntimo. Un futuro queda tal cual. None pasa."""
+    if not ch:
+        return ch
+    inst = comun.resolver(codigo)
+    if inst["tipo"] != "accion":
+        return ch
+    t = inst["tick"]
+    return dict(ch, velas=[(b[0], comun.al_tick(b[1], t), comun.al_tick(b[2], t), comun.al_tick(b[3], t), comun.al_tick(b[4], t), b[5]) for b in ch["velas"]])
+
+
 def cargar_velas(codigo, offline=None):
     """(velas de 1 m o None, velas de 5 m o None). Con --offline no se toca la red."""
+    ch1, ch5 = _cargar_velas(codigo, offline)
+    return velas_al_tick(ch1, codigo), velas_al_tick(ch5, codigo)
+
+
+def _cargar_velas(codigo, offline=None):
     ch1 = ch5 = None
     if offline:
         if not os.path.exists(offline):
@@ -182,7 +223,7 @@ def cierre_regular_anterior(codigo, ch5, ahora):
     """(cierre, fecha) de la última sesión regular ya terminada a esa hora, o (None, None)."""
     if not ch5:
         return None, None
-    dias = comun.por_dia(comun.velas_cerradas(ch5, ahora))
+    dias = comun.por_dia(comun.velas_cerradas(ch5, ahora), codigo)
     for d in sorted(dias, reverse=True):
         o, c = comun.sesion_regular(codigo, d)
         if c > ahora:
@@ -291,9 +332,11 @@ def _sono_hoy(stamp, hoy):
     return comun.a_ny(utc).date().isoformat() == hoy
 
 
-def dia_con_reloj(utc):
-    """Las reglas de hora suenan cualquier día que no sea sábado ni festivo de cierre completo."""
+def dia_con_reloj(utc, codigo=None):
+    """Las reglas de hora suenan cualquier día que no sea sábado ni festivo de cierre completo (de la NYSE si el símbolo es una acción)."""
     ny = comun.a_ny(utc)
+    if codigo and es_accion(codigo):
+        return ny.weekday() < 5 and ny.date().isoformat() not in comun.NYSE_CERRADO
     return ny.weekday() != 5 and ny.date().isoformat() not in comun.CME_CERRADO
 
 
@@ -313,11 +356,17 @@ def evaluar(reglas, qs, st, cfg, estado_, ahora):
         t = r["tipo"]
         if t == "apertura":
             codigo = codigo_de(r["simbolo"])
-            o, c = comun.sesion_regular(codigo, comun.dia_negociacion(ny))
-            if ahora >= o and st["globex"] != "cerrado" and dia_con_reloj(ahora) and not _sono_hoy(sonaron.get(rid), hoy):
-                msg = "Apertura de la sesión regular de %s: %s NY (%s Madrid)." % (codigo, comun.hhmm(comun.a_ny(o)), comun.hhmm(comun.a_madrid(o)))
-                if st.get("recortada"):
-                    msg += " Sesión recortada (%s): cierra a las %s NY." % (st["recortada"], comun.hhmm(comun.a_ny(c)))
+            accion = es_accion(codigo)
+            o, c = comun.sesion_regular(codigo, dia_de(codigo, ahora))
+            abierto_hoy = dia_con_reloj(ahora, codigo) if accion else (st["estado"] != "cerrado" and dia_con_reloj(ahora))
+            if ahora >= o and abierto_hoy and not _sono_hoy(sonaron.get(rid), hoy):
+                if accion:
+                    msg = "Campanazo de apertura de la NYSE para %s: %s NY (%s Madrid)." % (codigo, comun.hhmm(comun.a_ny(o)), comun.hhmm(comun.a_madrid(o)))
+                else:
+                    msg = "Apertura de la sesión regular de %s: %s NY (%s Madrid)." % (codigo, comun.hhmm(comun.a_ny(o)), comun.hhmm(comun.a_madrid(o)))
+                recortada = (comun.NYSE_RECORTADO if accion else comun.CME_RECORTADO).get(dia_de(codigo, ahora).isoformat())
+                if recortada:
+                    msg += " Sesión recortada (%s): cierra a las %s NY." % (recortada, comun.hhmm(comun.a_ny(c)))
                 toques.append({"id": rid, "simbolo": codigo, "mensaje": msg})
                 sonaron[rid] = stamp
             continue
@@ -390,7 +439,7 @@ def reglas_del_plan(plan, cfg):
             raise KemetError("el plan no trae %s (kemet-salida lo escribe)" % clave)
         nota = clave + " del plan" + ((", " + str(plan["regla_" + clave])) if plan.get("regla_" + clave) else "")
         out.append({"id": "%s-plan-%s" % (codigo.lower(), clave), "simbolo": codigo, "tipo": clave, "precio": float(v), "lado": lado, "nota": nota})
-    plano = plan.get("plano_a") or cfg.get("plano_a") or comun.CONTRATOS[codigo]["plano"]
+    plano = plan.get("plano_a") or cfg.get("plano_a") or comun.resolver(codigo)["plano"]
     comun.parse_hhmm(str(plano), "plano_a del plan")
     out.append({"id": "%s-plano-a" % codigo.lower(), "simbolo": codigo, "tipo": "hora", "a": str(plano), "etiqueta": "plano a"})
     if plan.get("fecha"):
@@ -424,17 +473,21 @@ def cmd_reloj(a):
     st = estado(ahora, codigo)
     if a.json:
         print(json.dumps(st, indent=2, ensure_ascii=False))
-        return 0 if st["globex"] == "abierto" else 1
+        return 0 if st["estado"] == "abierto" else 1
     d = dt.date.fromisoformat(st["fecha"])
-    print("Reloj de Globex: %s, %s %s. Globex %s (%s)." % (comun.hora_doble(ahora), st["dia_semana"], fecha_es(d),
-                                                            {"abierto": "ABIERTO", "pausa": "en PAUSA", "cerrado": "CERRADO"}[st["globex"]], st["motivo"]))
+    if st["reloj"] == "nyse":
+        print("Reloj de la NYSE: %s, %s %s. NYSE %s (%s)." % (comun.hora_doble(ahora), st["dia_semana"], fecha_es(d),
+                                                             {"abierto": "ABIERTA", "cerrado": "CERRADA"}[st["estado"]], st["motivo"]))
+    else:
+        print("Reloj de Globex: %s, %s %s. Globex %s (%s)." % (comun.hora_doble(ahora), st["dia_semana"], fecha_es(d),
+                                                                {"abierto": "ABIERTO", "pausa": "en PAUSA", "cerrado": "CERRADO"}[st["estado"]], st["motivo"]))
     linea = "Sesión regular de %s: %s a %s NY" % (codigo, st["regular_abre"], st["regular_cierra"])
     if st.get("regular_estado"):
         linea += ", %s" % st["regular_estado"]
     if st.get("recortada"):
         linea += " (recortada: %s)" % st["recortada"]
     print(linea + ".")
-    hl = hora_limite_ny(cfg)
+    hl = hora_limite_ny(cfg) if st["reloj"] == "globex" else None
     extra = []
     if cfg.get("plano_a"):
         extra.append("plano a las %s NY (tu hora)" % cfg["plano_a"])
@@ -442,14 +495,16 @@ def cmd_reloj(a):
         extra.append("hora límite de %s a las %s NY (%s %s)" % (cfg.get("cuenta_nombre") or "la firma", comun.hhmm(hl[0]), cfg.get("hora_limite"), hl[1]))
     if extra:
         print("Hoy: " + "; ".join(extra) + ".")
-    if st["globex"] == "abierto":
-        if st.get("cierra_hoy"):
+    if st["estado"] == "abierto":
+        if st.get("cierra_hoy") and st["reloj"] == "globex":
             print("Globex cierra hoy a las %s NY; pausa diaria de 17:00 a 18:00." % st["cierra_hoy"])
+        elif st.get("cierra_hoy"):
+            print("La NYSE cierra hoy a las %s NY. Una acción no tiene hora límite de firma." % st["cierra_hoy"])
     elif st.get("proxima_apertura"):
-        print("Próxima apertura de Globex: %s NY." % st["proxima_apertura"])
+        print("Próxima apertura de %s: %s NY." % (nombre_reloj(codigo), st["proxima_apertura"]))
     if not st["calendario_conocido"]:
-        print("Los festivos cargados son de %s: comprueba este día en el calendario de CME." % " y ".join(map(str, comun.CALENDARIO)))
-    return 0 if st["globex"] == "abierto" else 1
+        print("Los festivos cargados son de %s: comprueba este día en el calendario de %s." % (" y ".join(map(str, comun.CALENDARIO)), "la NYSE" if st["reloj"] == "nyse" else "CME"))
+    return 0 if st["estado"] == "abierto" else 1
 
 
 def cmd_quote(a):
@@ -483,7 +538,10 @@ def cmd_quote(a):
         print("error: " + e)
     if a.escribir and qs:
         print("Escrito %s con %d precio(s)." % (ruta, len(qs)))
-    print("Yahoo va con unos 10 minutos de retraso en futuros: vale para alertas, no para cronometrar una orden. El precio que te llena es el de tu plataforma.")
+    if all(es_accion(c) for c in codigos):
+        print("El cierre de Yahoo puede ir con retraso: vale para alertas, no para cronometrar una orden. El precio que te llena es el de tu plataforma.")
+    else:
+        print("Yahoo va con unos 10 minutos de retraso en futuros: vale para alertas, no para cronometrar una orden. El precio que te llena es el de tu plataforma.")
     return 0 if qs else 1
 
 
@@ -516,7 +574,10 @@ def cmd_check(a):
         print(json.dumps({"reloj": st, "sonaron": toques, "errores": errores,
                           "precios": {c: q["precio"] for c, q in qs.items()}}, indent=2, ensure_ascii=False))
         return 0 if toques else 1
-    print("Globex %s (%s, %s)." % ({"abierto": "abierto", "pausa": "en pausa", "cerrado": "cerrado"}[st["globex"]], comun.hora_doble(ahora), st["motivo"]))
+    if st["reloj"] == "nyse":
+        print("NYSE %s (%s, %s)." % ({"abierto": "abierta", "cerrado": "cerrada"}[st["estado"]], comun.hora_doble(ahora), st["motivo"]))
+    else:
+        print("Globex %s (%s, %s)." % ({"abierto": "abierto", "pausa": "en pausa", "cerrado": "cerrado"}[st["estado"]], comun.hora_doble(ahora), st["motivo"]))
     for t in toques:
         print("ALERTA " + t["mensaje"])
     if not toques:
@@ -556,6 +617,8 @@ def cmd_add(a):
         codigo = codigo_de(a.simbolo or _mercado(a, cfg))
         regla = {"id": a.id or "apertura-%s" % codigo.lower(), "tipo": "apertura", "simbolo": codigo}
     elif a.hora_limite:
+        if a.simbolo and es_accion(codigo_de(a.simbolo)):
+            raise KemetError("una acción no tiene hora límite de firma: usa --a HH:MM para un aviso de hora, o --apertura")
         if not hora_limite_ny(cfg):
             raise KemetError("kemet/config.json no tiene hora_limite: escríbelo con tamano.py config")
         regla = {"id": a.id or "hora-limite", "tipo": "hora_limite"}
@@ -596,6 +659,8 @@ def cmd_add(a):
     doc["reglas"].append(regla)
     comun.escribir_json(ruta_reglas, doc)
     print("Añadida %s: %s" % (regla["id"], json.dumps(regla, ensure_ascii=False)))
+    if regla["tipo"] == "apertura" and es_accion(regla["simbolo"]):
+        print("Suena una vez por día a partir de las 09:30 NY (13:00 de cierre en los días recortados de la NYSE), nunca en festivo ni en fin de semana.")
     return 0
 
 
@@ -632,7 +697,7 @@ def main(argv=None):
         p.add_argument("--offline", metavar="RUTA", help="un JSON de Yahoo guardado o la carpeta de fixtures, sin red")
         p.add_argument("--ahora", help='fija el reloj: "2026-11-11 15:55" en hora de Nueva York')
         p.add_argument("--json", action="store_true")
-        p.add_argument("--mercado", help="ES, NQ, CL o GC (por defecto el de kemet/config.json, si no NQ)")
+        p.add_argument("--mercado", "--simbolo", dest="mercado", help="un futuro (ES, NQ, CL, GC...) o un ticker de EE. UU. (TSLA); por defecto el de kemet/config.json, si no NQ")
 
     def archivos(p):
         p.add_argument("--reglas", metavar="RUTA", help="por defecto kemet/alertas.json")
@@ -642,7 +707,7 @@ def main(argv=None):
     red(p)
     p = sub.add_parser("quote", help="el último cierre de Yahoo")
     red(p)
-    p.add_argument("simbolos", nargs="*", help="NQ ES CL GC (o MNQ, MES...)")
+    p.add_argument("simbolos", nargs="*", help="NQ ES CL GC (o MNQ, MES...) o tickers de EE. UU. (TSLA)")
     p.add_argument("--escribir", action="store_true", help="guarda kemet/precios.json")
     p.add_argument("--precios", metavar="RUTA", help="por defecto kemet/precios.json")
     p = sub.add_parser("check", help="comprueba cada regla y hace sonar lo que tocó")
@@ -653,7 +718,7 @@ def main(argv=None):
     p = sub.add_parser("add", help="añade una regla")
     archivos(p)
     p.add_argument("--mercado")
-    p.add_argument("--simbolo", help="NQ, ES, CL, GC o el micro")
+    p.add_argument("--simbolo", help="NQ, ES, CL, GC, el micro, o un ticker de EE. UU. (TSLA)")
     g = p.add_mutually_exclusive_group()
     g.add_argument("--encima", type=float)
     g.add_argument("--debajo", type=float)

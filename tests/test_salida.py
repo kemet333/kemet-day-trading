@@ -1,6 +1,9 @@
 """kemet-salida: stop y objetivo sobre el disparo real de la ruptura del IB del miércoles 2026-11-11 en NQ (fixture real
 tests/fixtures/yahoo/NQ=F-60d-5m.json.gz, sin red): entrada 28.429,75 largo a las 10:45 (barra 15), IB 28.199 a 28.426.
 El entrada.json se escribe con el propio entrada.py en un KEMET_DIR temporal.
+
+Acciones: TSLA, 2026-11-11 (fixture real TSLA-60d-5m.json.gz): IB de 15 minutos 386,35 a 392,67, disparo largo a las 10:15 en
+393,08 (barra 9); el riesgo va en dólares por acción, sin micros ni minis ni hora límite de firma.
 """
 import datetime
 import io
@@ -178,6 +181,90 @@ class ConDisparoReal(unittest.TestCase):
         p = self.plan("--entrada", "28429.75", "--lado", "largo")     # por adelantado, con el IB del archivo
         self.assertEqual((p["stop"], p["objetivo"]), (28312.5, 28547.0))
         self.assertIsNone(p["hora_entrada"])
+
+
+class ConDisparoDeTsla(unittest.TestCase):
+    AHORA_T = "2026-11-11 10:16"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.kemet = os.path.join(self.tmp, "kemet")
+        self._old = comun.KEMET_DIR
+        comun.KEMET_DIR = self.kemet
+        codigo, out, err = correr(entrada, ["check", "--mercado", "TSLA", "--ahora", "2026-11-11 10:15", "--offline", YAHOO, "--escribir"])
+        self.assertEqual(codigo, 0, err)
+
+    def tearDown(self):
+        comun.KEMET_DIR = self._old
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def plan(self, *extra):
+        codigo, out, err = correr(salida, ["plan", "--ahora", self.AHORA_T, "--json"] + list(extra))
+        self.assertEqual(codigo, 0, out + err)
+        return json.loads(out)
+
+    def rechazo(self, *extra):
+        codigo, out, err = correr(salida, ["plan", "--ahora", self.AHORA_T] + list(extra))
+        self.assertEqual(codigo, 1, out + err)
+        return out
+
+    def test_plan_en_dolares_por_accion(self):
+        p = self.plan()
+        self.assertEqual((p["mercado"], p["instrumento"], p["micro"], p["mini"], p["ib_minutos"]), ("TSLA", "accion", "TSLA", "TSLA", 15))
+        self.assertEqual((p["lado"], p["entrada"], p["hora_entrada"], p["barra"]), ("largo", 393.08, "10:15", 9))
+        self.assertEqual((p["stop"], p["regla_stop"]), (389.51, "ib-medio"))          # (392,67 + 386,35) / 2
+        self.assertEqual((p["objetivo"], p["regla_objetivo"]), (396.65, "R:1"))       # 393,08 + 3,57
+        self.assertEqual((p["riesgo_pts"], p["riesgo_usd_accion"], p["riesgo_usd_micro"], p["riesgo_usd_mini"], p["rr"]), (3.57, 3.57, 3.57, 3.57, 1.0))
+        self.assertEqual((p["plano_a"], p["plano_a_origen"]), ("15:55", "accion"))
+        self.assertEqual(p["ib"], {"alto": 392.67, "bajo": 386.35, "ancho": 6.32})
+        codigo, out, err = correr(salida, ["plan", "--ahora", self.AHORA_T, "--escribir"])
+        self.assertEqual(codigo, 0, err)
+        self.assertIn("Plan de salida: TSLA largo, miércoles 11/11/2026, ruptura del IB de 15 minutos sobre velas de 5 minutos", out)
+        self.assertIn("Entrada   393,08 a las 10:15 NY (barra 9)", out)
+        self.assertIn("Stop      389,51  punto medio del IB: (392,67 + 386,35) / 2", out)
+        self.assertIn("Objetivo  396,65  1 R (1 vez el riesgo): 393,08 + 1 x 3,57", out)
+        self.assertIn("Riesgo    3,57 $ por acción", out)
+        self.assertIn("Recorrido 3,57 $ hasta el objetivo, 1 vez el riesgo", out)
+        self.assertIn("IB        386,35 a 392,67, 6,32 $", out)
+        self.assertIn("21:55 Madrid / 15:55 NY", out)
+        self.assertIn("una acción no tiene hora límite de firma", out)
+        self.assertIn("acciones enteras", out)
+        self.assertNotIn("por micro", out)
+        self.assertNotIn("puntos", out)
+        with open(os.path.join(self.kemet, "plan.json"), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["riesgo_usd_accion"], 3.57)
+        codigo, out, _ = correr(salida, ["show", "--ahora", self.AHORA_T])
+        self.assertEqual(codigo, 0)
+        self.assertIn("3,57 $ por acción", out)
+
+    def test_otros_stops_en_una_accion(self):
+        p = self.plan("--stop", "ib-opuesto", "--objetivo", "R:2")
+        self.assertEqual((p["stop"], p["riesgo_pts"], p["objetivo"], p["rr"]), (386.35, 6.73, 406.54, 2.0))
+        p = self.plan("--stop", "atr:1.5", "--offline", YAHOO)
+        self.assertEqual(p["atr_velas"], 9)                                 # solo hay 9 velas hasta la de la entrada
+        self.assertAlmostEqual(p["atr"], 3.2256, places=3)
+        self.assertEqual((p["stop"], p["riesgo_pts"], p["objetivo"], p["regla_stop"]), (388.24, 4.84, 397.92, "atr:1.5"))
+        p = self.plan("--stop", "pts:0.04")                                 # 4 céntimos: 4 ticks justos
+        self.assertEqual(p["riesgo_pts"], 0.04)
+        out = self.rechazo("--stop", "pts:0.03")
+        self.assertIn("0,03 $ de la entrada, menos de 4 ticks (0,04)", out)
+        out = self.rechazo("--stop", "precio:395")
+        self.assertIn("el stop de un largo va debajo", out)
+        p = self.plan("--objetivo", "precio:400")
+        self.assertEqual((p["objetivo"], p["rr"]), (400.0, 1.94))
+
+    def test_sin_hora_limite_de_firma_y_dia_recortado(self):
+        with open(os.path.join(self.kemet, "config.json"), "w", encoding="utf-8") as fh:
+            json.dump({"mercado": "TSLA", "tipo_cuenta": "propia", "plano_a": "15:55", "hora_limite": "15:10", "hora_limite_tz": "America/Chicago"}, fh)
+        p = self.plan()
+        self.assertEqual((p["plano_a"], p["notas"]), ("15:55", []))         # la hora límite del config no toca a una acción
+        t, origen, notas = salida.resolver_plano("TSLA", datetime.date(2026, 11, 27), None, None)
+        self.assertEqual((comun.hhmm(t), origen), ("12:55", "accion"))
+        self.assertTrue(notas and "13:00" in notas[0] and "Thanksgiving" in notas[0], notas)
+        self.assertEqual(salida.mercado_de("tsla", None), "TSLA")
+        c = salida.calcular("TSLA", "corto", 386.0, "ib-medio", None, "R", 1.0, 392.67, 386.35)
+        self.assertEqual((c["stop"], c["objetivo"], c["riesgo_pts"], c["riesgo_usd_accion"]), (389.51, 382.49, 3.51, 3.51))
+        self.assertIsNone(salida.calcular("NQ", "largo", 28429.75, "pts", 60.0, "R", 1.0)["riesgo_usd_accion"])
 
 
 class SinEntradaJson(unittest.TestCase):

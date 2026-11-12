@@ -3,7 +3,12 @@
 Cada carpeta de skill lleva una copia idéntica de este archivo (tests/test_repo.py lo comprueba), porque cada
 skill se instala sola. Hora de Nueva York y de Madrid calculadas a mano (sin zoneinfo: funciona igual en Windows),
 velas de Yahoo Finance (gratis, sin clave, unos 10 minutos de retraso en futuros), el día de negociación de CME
-(empieza a las 18:00 NY del día anterior), contratos y micros, el reloj de Globex, y los archivos de `kemet/`.
+(empieza a las 18:00 NY del día anterior), contratos y micros, acciones de EE. UU. por su ticker, el reloj de
+Globex y el de la NYSE, y los archivos de `kemet/`.
+
+Instrumentos: `resolver("NQ")` devuelve el contrato (mini y micro, tick, valor del punto, sesión regular);
+`resolver("TSLA")` devuelve la acción (1 $ por punto y acción, tick 0,01, 09:30 a 16:00 NY, festivos NYSE).
+Las funciones que reciben `codigo` aceptan cualquiera de los dos.
 """
 import datetime as _dt
 import functools
@@ -11,6 +16,7 @@ import glob
 import gzip
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -31,7 +37,14 @@ CONTRATOS = {
     "RTY": {"yahoo": "RTY=F", "mini": "RTY", "micro": "M2K", "tick": 0.1, "punto_mini": 50.0,   "punto_micro": 5.0,   "rth": ("09:30", "16:00"), "plano": "15:55", "nombre": "Russell 2000"},
     "CL":  {"yahoo": "CL=F", "mini": "CL",  "micro": "MCL", "tick": 0.01, "punto_mini": 1000.0, "punto_micro": 100.0, "rth": ("09:00", "14:30"), "plano": "14:25", "nombre": "Crudo WTI"},
     "GC":  {"yahoo": "GC=F", "mini": "GC",  "micro": "MGC", "tick": 0.1,  "punto_mini": 100.0,  "punto_micro": 10.0,  "rth": ("08:20", "13:30"), "plano": "13:25", "nombre": "Oro"},
+    "SI":  {"yahoo": "SI=F", "mini": "SI",  "micro": "SIL", "tick": 0.005, "punto_mini": 5000.0, "punto_micro": 1000.0, "rth": ("08:25", "13:25"), "plano": "13:20", "nombre": "Plata"},
+    "HG":  {"yahoo": "HG=F", "mini": "HG",  "micro": "MHG", "tick": 0.0005, "punto_mini": 25000.0, "punto_micro": 2500.0, "rth": ("08:10", "13:00"), "plano": "12:55", "nombre": "Cobre"},
+    "NG":  {"yahoo": "NG=F", "mini": "NG",  "micro": "MNG", "tick": 0.001, "punto_mini": 10000.0, "punto_micro": 2500.0, "rth": ("09:00", "14:30"), "plano": "14:25", "nombre": "Gas natural"},
+    "6E":  {"yahoo": "6E=F", "mini": "6E",  "micro": "M6E", "tick": 0.00005, "punto_mini": 125000.0, "punto_micro": 12500.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Euro"},
+    "ZN":  {"yahoo": "ZN=F", "mini": "ZN",  "micro": "ZN",  "tick": 0.015625, "punto_mini": 1000.0, "punto_micro": 1000.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Bono 10 años"},
+    "ZB":  {"yahoo": "ZB=F", "mini": "ZB",  "micro": "ZB",  "tick": 0.03125, "punto_mini": 1000.0, "punto_micro": 1000.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Bono 30 años"},
 }
+INDICES = ("ES", "NQ", "YM", "RTY")
 MICRO_A_CODIGO = {v["micro"]: k for k, v in CONTRATOS.items()}
 
 # CME Globex (futuros de índices, energía y metales): abre el domingo a las 18:00 NY, cierra el viernes a las 17:00 NY,
@@ -48,6 +61,42 @@ CME_RECORTADO = {  # cierre anticipado de la sesión regular: 13:00 NY para índ
     "2027-06-18": "Juneteenth (observado)", "2027-07-05": "Independence Day (observado)", "2027-09-06": "Labor Day", "2027-11-25": "Thanksgiving", "2027-11-26": "Día después de Thanksgiving",
 }
 CALENDARIO = (2026, 2027)
+
+# NYSE (acciones): cerrada y sesión recortada a las 13:00 NY (nyse.com/markets/hours-calendars, leído el 2026-10-13).
+NYSE_CERRADO = {
+    "2026-01-01": "Año Nuevo", "2026-01-19": "Martin Luther King", "2026-02-16": "Presidents Day", "2026-04-03": "Viernes Santo",
+    "2026-05-25": "Memorial Day", "2026-06-19": "Juneteenth", "2026-07-03": "Independence Day (observado)", "2026-09-07": "Labor Day",
+    "2026-11-26": "Thanksgiving", "2026-12-25": "Navidad",
+    "2027-01-01": "Año Nuevo", "2027-01-18": "Martin Luther King", "2027-02-15": "Presidents Day", "2027-03-26": "Viernes Santo",
+    "2027-05-31": "Memorial Day", "2027-06-18": "Juneteenth (observado)", "2027-07-05": "Independence Day (observado)", "2027-09-06": "Labor Day",
+    "2027-11-25": "Thanksgiving", "2027-12-24": "Navidad (observado)",
+}
+NYSE_RECORTADO = {"2026-11-27": "Día después de Thanksgiving", "2026-12-24": "Nochebuena", "2027-11-26": "Día después de Thanksgiving"}
+_TICKER = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
+
+
+def resolver(simbolo):
+    """Un futuro por su código (NQ), su mini o su micro (MNQ, MES), o una acción de EE. UU. por su ticker (TSLA, BRK.B).
+    Devuelve un dict con `tipo` ("futuro" | "accion"), `codigo`, `yahoo`, `tick`, `punto_mini`, `punto_micro`, `mini`, `micro`,
+    `rth`, `plano`, `nombre`. Para una acción, el punto vale 1 $ por acción y mini y micro son el propio ticker."""
+    if isinstance(simbolo, dict):
+        return simbolo
+    s = str(simbolo or "").strip().upper()
+    if s in CONTRATOS:
+        return dict(CONTRATOS[s], tipo="futuro", codigo=s)
+    if s in MICRO_A_CODIGO:
+        c = MICRO_A_CODIGO[s]
+        return dict(CONTRATOS[c], tipo="futuro", codigo=c)
+    if s.endswith("=F") and s[:-2] in CONTRATOS:
+        return dict(CONTRATOS[s[:-2]], tipo="futuro", codigo=s[:-2])
+    if _TICKER.match(s):
+        return {"tipo": "accion", "codigo": s, "yahoo": s.replace(".", "-"), "mini": s, "micro": s, "tick": 0.01, "punto_mini": 1.0, "punto_micro": 1.0,
+                "rth": ("09:30", "16:00"), "plano": "15:55", "nombre": s}
+    raise KemetError("no conozco el instrumento %r: un futuro (%s) o un ticker de EE. UU." % (simbolo, ", ".join(CONTRATOS)))
+
+
+def es_accion(simbolo):
+    return resolver(simbolo)["tipo"] == "accion"
 
 
 class KemetError(Exception):
@@ -173,13 +222,45 @@ def estado_globex(utc):
 
 
 @functools.lru_cache(maxsize=4096)
-def sesion_regular(codigo, dia):
-    """(apertura, cierre) UTC de la sesión regular de ese contrato ese día; cierre a las 13:00 NY en días recortados (índices)."""
-    o, c = CONTRATOS[codigo]["rth"]
+def estado_nyse(utc):
+    """abierto | cerrado para acciones: 09:30 a 16:00 NY entre semana, sin festivos; 13:00 en días recortados. Devuelve (estado, motivo)."""
+    ny = a_ny(utc)
+    d, t = ny.date(), ny.time()
+    clave = d.isoformat()
+    if clave in NYSE_CERRADO:
+        return "cerrado", NYSE_CERRADO[clave]
+    if d.weekday() >= 5:
+        return "cerrado", "fin de semana"
+    cierre = _dt.time(13, 0) if clave in NYSE_RECORTADO else _dt.time(16, 0)
+    if t < _dt.time(9, 30):
+        return "cerrado", "antes de la apertura (09:30 NY)"
+    if t >= cierre:
+        return "cerrado", "después del cierre (%s NY)" % hhmm(cierre)
+    return "abierto", ("sesión recortada: " + NYSE_RECORTADO[clave]) if clave in NYSE_RECORTADO else "sesión regular"
+
+
+def estado_mercado(simbolo, utc):
+    """El reloj que toca: Globex para un futuro, la NYSE para una acción."""
+    return estado_nyse(utc) if es_accion(simbolo) else estado_globex(utc)
+
+
+@functools.lru_cache(maxsize=8192)
+def _sesion_regular(codigo, dia):
+    inst = resolver(codigo)
+    o, c = inst["rth"]
     o_t, c_t = parse_hhmm(o), parse_hhmm(c)
-    if dia.isoformat() in CME_RECORTADO and codigo in ("ES", "NQ", "YM", "RTY"):
+    clave = dia.isoformat()
+    if inst["tipo"] == "accion":
+        if clave in NYSE_RECORTADO:
+            c_t = _dt.time(13, 0)
+    elif clave in CME_RECORTADO and inst["codigo"] in INDICES:
         c_t = _dt.time(13, 0)
     return de_ny(_dt.datetime.combine(dia, o_t)), de_ny(_dt.datetime.combine(dia, c_t))
+
+
+def sesion_regular(codigo, dia):
+    """(apertura, cierre) UTC de la sesión regular de ese instrumento ese día; 13:00 NY en días recortados (índices y acciones)."""
+    return _sesion_regular(resolver(codigo)["codigo"], dia)
 
 
 # ---------------------------------------------------------------- Yahoo
@@ -231,7 +312,7 @@ def yahoo_get(path):
 
 
 def chart_path(codigo, rango="5d", intervalo="5m"):
-    return "/v8/finance/chart/%s?range=%s&interval=%s" % (CONTRATOS[codigo]["yahoo"].replace("=", "%3D"), rango, intervalo)
+    return "/v8/finance/chart/%s?range=%s&interval=%s" % (resolver(codigo)["yahoo"].replace("=", "%3D"), rango, intervalo)
 
 
 def leer_texto(path):
@@ -278,7 +359,7 @@ def parse_chart(text, codigo=None):
 def velas(codigo, rango="5d", intervalo="5m", offline=None):
     """Velas de un contrato: de un archivo guardado (`--offline`, .json o .json.gz) o de Yahoo."""
     if offline:
-        y = CONTRATOS[codigo]["yahoo"]
+        y = resolver(codigo)["yahoo"]
         if os.path.isdir(offline):
             exactos = ["%s-%s-%s.json.gz" % (y, rango, intervalo), "%s-%s-%s.json" % (y, rango, intervalo), "%s.json.gz" % y, "%s.json" % y, "%s.json" % codigo]
             rutas = [os.path.join(offline, n) for n in exactos if os.path.exists(os.path.join(offline, n))]
@@ -292,7 +373,7 @@ def velas(codigo, rango="5d", intervalo="5m", offline=None):
         ch = parse_chart(leer_texto(offline), codigo)
     else:
         ch = parse_chart(yahoo_get(chart_path(codigo, rango, intervalo)), codigo)
-    if ch["simbolo"] and ch["simbolo"] != CONTRATOS[codigo]["yahoo"]:
+    if ch["simbolo"] and ch["simbolo"] != resolver(codigo)["yahoo"]:
         raise KemetError("el archivo es de %s, no de %s" % (ch["simbolo"], codigo))
     return ch
 
@@ -303,11 +384,13 @@ def velas_cerradas(ch, ahora_utc):
     return [b for b in ch["velas"] if b[0] <= lim]
 
 
-def por_dia(velas_):
-    """Agrupa velas por día de negociación de CME (18:00 NY a 17:00 NY), ordenado."""
+def por_dia(velas_, codigo=None):
+    """Agrupa velas por día de negociación: el de CME (18:00 NY a 17:00 NY) para futuros, la fecha NY para acciones."""
+    accion = bool(codigo) and es_accion(codigo)
     out = {}
     for b in velas_:
-        out.setdefault(dia_negociacion(a_ny(utc_de_ts(b[0]))), []).append(b)
+        ny = a_ny(utc_de_ts(b[0]))
+        out.setdefault(ny.date() if accion else dia_negociacion(ny), []).append(b)
     return dict(sorted(out.items()))
 
 

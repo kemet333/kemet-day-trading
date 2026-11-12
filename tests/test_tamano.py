@@ -1,4 +1,5 @@
-"""kemet-tamano: config con la regla Kemet, calc como el tamano.py anterior, orden con topes y rechazos. Sin red."""
+"""kemet-tamano: config con la regla Kemet, calc como el tamano.py anterior, orden con topes y rechazos; la cuenta propia y las
+acciones (TSLA del 11/11/2026, ruptura del rango de 15 minutos del fixture real). Sin red."""
 import contextlib
 import io
 import json
@@ -179,7 +180,8 @@ class TestOrden(Base):
             doc = json.load(fh)
         self.assertEqual(set(doc), {"generado", "ordenes", "cuenta", "papel"})
         o = doc["ordenes"][0]
-        self.assertEqual(set(o), {"simbolo", "lado", "contratos", "tipo", "precio", "stop", "objetivo", "riesgo_pts", "perdida_max_usd", "por_que", "plan"})
+        self.assertEqual(set(o), {"simbolo", "lado", "contratos", "tipo", "precio", "stop", "objetivo", "riesgo_pts", "perdida_max_usd", "por_que", "plan", "instrumento"})
+        self.assertEqual(o["instrumento"], "futuro")
         self.assertEqual((o["simbolo"], o["lado"], o["contratos"], o["tipo"]), ("MNQ", "compra", 1, "stop"))
         self.assertEqual((o["precio"], o["stop"], o["objetivo"], o["riesgo_pts"], o["perdida_max_usd"]), (28429.75, 28312.5, 28547.0, 117.25, 234.5))
         self.assertIn("manda riesgo por operación", o["por_que"])
@@ -246,6 +248,158 @@ class TestOrden(Base):
         code, out, err = run(["orden", "--ahora", "2026-11-11 10:40"])
         self.assertEqual(code, 2)
         self.assertIn("config", err)
+
+
+# TSLA, 11/11/2026 (fixture real): rango de 15 minutos 09:30–09:45 = 386,35 a 392,67; la primera vela de 5 min cerrada fuera es la de las
+# 10:10, que cierra a las 10:15 en 393,08. Stop en el punto medio del rango (389,51), objetivo 1R (396,65): 3,57 $ por acción.
+PLAN_TSLA = {"generado": "2026-11-11T15:15:00Z", "mercado": "TSLA", "micro": "TSLA", "fecha": "2026-11-11", "lado": "largo", "entrada": 393.08,
+             "hora_entrada": "10:15", "barra": 9, "stop": 389.51, "regla_stop": "ib-medio", "objetivo": 396.65, "regla_objetivo": "R:1",
+             "riesgo_pts": 3.57, "rr": 1.0, "plano_a": "15:55", "ib": {"alto": 392.67, "bajo": 386.35, "ancho": 6.32, "minutos": 15}}
+CLAVES_PROPIA = {"mercado", "tipo_cuenta", "firma", "cuenta", "cuenta_nombre", "presupuesto", "efectivo_pct", "max_posicion_pct", "max_orden_usd",
+                 "min_orden_usd", "perdida_max_dia", "riesgo_por_operacion", "fallos_y_paras", "semaforo", "max_micro", "hora_limite", "hora_limite_tz",
+                 "sin_entradas_antes", "sin_entradas_despues", "plano_a", "zona_usuario", "papel", "permitir_cortos", "permitir_margen",
+                 "permitir_opciones", "bloqueados", "sec_user_agent"}
+PROPIA = ["--propia", "--presupuesto", "5000", "--max-perdida-operacion", "50", "--max-perdida-dia", "150", "--mercado", "TSLA"]
+
+
+class TestPropia(Base):
+    def precios(self, precio, leido):
+        comun.escribir_json(os.path.join(self.kemet, "precios.json"), {"generado": leido, "fuente": "yahoo", "precios": {
+            "TSLA": {"precio": precio, "hora_vela": "2026-11-11 10:10", "intervalo": "1m", "retraso_min": 1, "leido": leido}}})
+
+    def orden(self, *extra):
+        code, out, err = run(["orden", "--ahora", "2026-11-11 10:15", "--json"] + list(extra))
+        self.assertIn(code, (0, 1), err)
+        return code, json.loads(out)
+
+    def test_config_propia_con_las_claves(self):
+        cfg = self.config(*PROPIA)
+        self.assertEqual(set(cfg), CLAVES_PROPIA)
+        self.assertEqual((cfg["tipo_cuenta"], cfg["cuenta"], cfg["mercado"], cfg["firma"]), ("propia", "propia", "TSLA", None))
+        self.assertEqual((cfg["presupuesto"], cfg["perdida_max_dia"], cfg["riesgo_por_operacion"], cfg["fallos_y_paras"]), (5000, 150, 50, 3))
+        self.assertEqual((cfg["max_posicion_pct"], cfg["max_orden_usd"], cfg["min_orden_usd"], cfg["efectivo_pct"]), (75, 4000, 5, 10))
+        self.assertEqual((cfg["sin_entradas_antes"], cfg["sin_entradas_despues"], cfg["plano_a"]), ("09:45", "15:00", "15:55"))
+        self.assertEqual((cfg["permitir_cortos"], cfg["permitir_margen"], cfg["permitir_opciones"], cfg["bloqueados"]), (False, False, False, []))
+        self.assertTrue(cfg["papel"])
+        self.assertIsNone(cfg["hora_limite"])
+        self.assertEqual(cfg["sec_user_agent"], "Nombre correo@ejemplo.com")
+        cfg = self.config(*PROPIA, "--max-posicion-pct", "100", "--max-orden", "10000", "--efectivo-pct", "0", "--permitir-cortos", "--sec-user-agent", "Ana ana@ejemplo.com")
+        self.assertEqual((cfg["max_posicion_pct"], cfg["max_orden_usd"], cfg["efectivo_pct"], cfg["permitir_cortos"], cfg["sec_user_agent"]), (100, 10000, 0, True, "Ana ana@ejemplo.com"))
+        code, out, err = run(["config", "--propia", "--presupuesto", "5000", "--max-perdida-operacion", "50", "--max-perdida-dia", "40"])
+        self.assertEqual(code, 2)
+        self.assertIn("no puede ser menor", err)
+        code, out, err = run(["config", "--propia", "--presupuesto", "5000", "--max-perdida-operacion", "50", "--max-perdida-dia", "150", "--firma", "apex"])
+        self.assertEqual(code, 2)
+        code, out, err = run(["config"])
+        self.assertEqual(code, 2)                             # ni firma ni propia
+
+    def test_calc_en_acciones_cada_tope_manda_una_vez(self):
+        self.config(*PROPIA)
+        code, out, _ = run(["calc", "--stop", "3.57", "--entrada", "393.08", "--json"])
+        r = json.loads(out)
+        self.assertEqual(code, 0)
+        self.assertEqual((r["acciones"], r["manda"], r["perdida_max_usd"], r["coste"]), (9, "posición máxima", 32.13, 3537.72))
+        self.assertEqual([(l["nombre"], l["acciones"]) for l in r["limites"]],
+                         [("riesgo por operación", 14), ("posición máxima", 9), ("orden máxima", 10), ("efectivo", 11)])
+        self.config(*PROPIA[:2], "10000", *PROPIA[3:], "--max-posicion-pct", "100", "--max-orden", "10000")   # 10.000 $: el riesgo manda
+        r = json.loads(run(["calc", "--stop", "3.57", "--entrada", "393.08", "--json"])[1])
+        self.assertEqual((r["acciones"], r["manda"]), (14, "riesgo por operación"))
+        self.config(*PROPIA, "--max-posicion-pct", "100", "--max-orden", "2000")
+        r = json.loads(run(["calc", "--stop", "3.57", "--entrada", "393.08", "--json"])[1])
+        self.assertEqual((r["acciones"], r["manda"]), (5, "orden máxima"))
+        self.config(*PROPIA, "--max-posicion-pct", "100", "--max-orden", "10000")
+        comun.escribir_json(os.path.join(self.kemet, "portfolio.json"), {"efectivo": 1500.0, "posiciones": [], "actualizado": "2026-11-11T15:00:00Z"})
+        r = json.loads(run(["calc", "--stop", "3.57", "--entrada", "393.08", "--json"])[1])
+        self.assertEqual((r["acciones"], r["manda"]), (2, "efectivo"))     # (1.500 menos 500 de colchón) / 393,08
+        self.assertIn("1.500 $ de efectivo en kemet/portfolio.json", r["limites"][-1]["como"])
+        os.remove(os.path.join(self.kemet, "portfolio.json"))
+        code, out, _ = run(["calc", "--stop", "3.57"])
+        self.assertEqual(code, 0)
+        self.assertIn("Acciones: 14 TSLA por el riesgo por operación", out)
+        code, out, _ = run(["calc", "--stop", "60", "--entrada", "393.08"])
+        self.assertEqual(code, 1)                             # 60 $ por acción no caben en 50 $
+        self.assertIn("Acciones: 0 TSLA", out)
+        code, out, _ = run(["calc", "--stop", "3.57", "--entrada", "393.08", "--mercado", "TSLA", "--presupuesto", "5000", "--max-perdida-operacion", "50"])
+        self.assertIn("9 TSLA", out)                           # sin config, con los límites a mano
+        code, out, _ = run(["calc", "--stop", "18", "--mercado", "NQ"])
+        self.assertIn("Contratos: 1 MNQ", out)                 # un futuro con la cuenta propia: 50 $ / (18 × 2 $)
+        code, out, err = run(["calc", "--stop", "18", "--firma", "apex", "--cuenta", "eod-pa-50", "--mercado", "TSLA"])
+        self.assertEqual(code, 2)                             # una acción con una cuenta de firma no tiene sentido
+
+    def test_orden_en_formato_alpaca(self):
+        self.config(*PROPIA)
+        self.plan(PLAN_TSLA)
+        code, out, _ = run(["orden", "--ahora", "2026-11-11 10:15", "--escribir"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("Tamaño: 9 acciones de TSLA = 3.537,72 $. Pérdida al stop: 9 × 3,57 $ = 32,13 $.", out)
+        with open(os.path.join(self.kemet, "orden.json"), encoding="utf-8") as fh:
+            doc = json.load(fh)
+        self.assertEqual(set(doc), {"generado", "ordenes", "cuenta", "papel"})
+        o = doc["ordenes"][0]
+        self.assertEqual({k: v for k, v in o.items() if k not in ("why", "plan")},
+                         {"symbol": "TSLA", "side": "buy", "qty": "9", "type": "market", "time_in_force": "day", "order_class": "bracket",
+                          "take_profit_limit_price": "396.65", "stop_loss_stop_price": "389.51", "instrumento": "accion"})
+        self.assertEqual(list(o)[:8], ["symbol", "side", "qty", "type", "time_in_force", "order_class", "take_profit_limit_price", "stop_loss_stop_price"])
+        self.assertTrue(all(isinstance(o[k], str) for k in ("qty", "take_profit_limit_price", "stop_loss_stop_price")))
+        self.assertIn("manda posición máxima", o["why"])
+        self.assertEqual((o["plan"]["riesgo_por_accion"], o["plan"]["perdida_max_usd"], o["plan"]["coste"], o["plan"]["plano_a"]), (3.57, 32.13, 3537.72, "15:55"))
+        code, r = self.orden("--limite", "393.00")
+        self.assertEqual(code, 0)
+        o = r["orden"]["ordenes"][0]
+        self.assertEqual((o["type"], o["limit_price"], o["qty"]), ("limit", "393.00", "9"))
+        self.assertEqual(r["tamano"]["riesgo_por_accion"], 3.49)
+        code, r = self.orden("--limite")
+        self.assertEqual((r["orden"]["ordenes"][0]["type"], r["orden"]["ordenes"][0]["limit_price"]), ("limit", "393.08"))
+
+    def test_precio_fresco_sube_el_riesgo_y_baja_las_acciones(self):
+        self.config(*PROPIA[:2], "10000", *PROPIA[3:], "--max-posicion-pct", "100", "--max-orden", "10000")   # manda el riesgo: 14 acciones
+        self.plan(PLAN_TSLA)
+        self.assertEqual(self.orden()[1]["tamano"]["acciones"], 14)
+        self.precios(394.50, "2026-11-11T15:14:00Z")                                 # hace 1 minuto, por encima de la entrada
+        code, r = self.orden()
+        t = r["tamano"]
+        self.assertEqual((t["entrada"], t["riesgo_por_accion"], t["acciones"], t["origen_entrada"]), (394.5, 4.99, 10, "precio"))
+        self.assertEqual(r["orden"]["ordenes"][0]["qty"], "10")
+        self.assertEqual(r["orden"]["ordenes"][0]["plan"]["entrada_plan"], 393.08)
+        self.precios(392.00, "2026-11-11T15:14:00Z")                                 # por debajo: nunca sube el tamaño
+        self.assertEqual(self.orden()[1]["tamano"]["acciones"], 14)
+        self.precios(394.50, "2026-11-11T14:30:00Z")                                 # viejo (45 min): no cuenta
+        t = self.orden()[1]["tamano"]
+        self.assertEqual((t["acciones"], t["origen_entrada"]), (14, "plan"))
+        self.precios(397.00, "2026-11-11T15:14:00Z")                                 # el precio ya pasó el objetivo: rechazo
+        code, r = self.orden()
+        self.assertEqual(code, 1)
+        self.assertIn("el recorrido ya se ha hecho", r["tamano"]["rechazo"])
+
+    def test_rechazos_en_acciones(self):
+        self.config(*PROPIA)
+        self.plan(dict(PLAN_TSLA, lado="corto", stop=396.65, objetivo=389.51))
+        code, r = self.orden()
+        self.assertEqual(code, 1)
+        self.assertIn("no permite cortos", r["tamano"]["rechazo"])
+        self.config(*PROPIA, "--permitir-cortos")
+        code, r = self.orden()
+        self.assertEqual(code, 0)
+        self.assertEqual((r["orden"]["ordenes"][0]["side"], r["orden"]["ordenes"][0]["qty"]), ("sell", "9"))
+        self.config(*PROPIA)
+        self.plan(PLAN_TSLA)
+        self.dia([{"hora": "09:50", "simbolo": "TSLA", "lado": "compra", "contratos": 9, "riesgo_usd": 32.13, "resultado_usd": -130.0, "cerrada": "10:05"}])
+        code, r = self.orden()
+        self.assertEqual((r["tamano"]["acciones"], r["tamano"]["manda"], r["tamano"]["queda"]), (5, "lo que queda del día", 20.0))
+        self.dia([{"hora": "09:50", "simbolo": "TSLA", "lado": "compra", "contratos": 9, "riesgo_usd": 32.13, "resultado_usd": -148.0, "cerrada": "10:05"}])
+        code, r = self.orden()
+        self.assertEqual(code, 1)
+        self.assertIn("el día está hecho", r["tamano"]["rechazo"])
+        self.dia([])
+        comun.escribir_json(os.path.join(self.kemet, "estado", "broker.json"), {"fecha": "2026-11-11", "ordenes": [
+            {"fecha": "2026-11-11", "cuando": "09:50", "huella": "abc", "simbolo": "TSLA", "lado": "compra", "cantidad": "9", "instrumento": "accion",
+             "clase": "entrada", "perdida_al_stop": 32.13, "estado": "colocada"}]})
+        t = self.orden()[1]["tamano"]
+        self.assertEqual((t["operaciones_hoy"], t["riesgo_abierto"]), (1, 32.13))     # lo colocado en papel cuenta
+        self.config("--firma", "apex", "--cuenta", "eod-pa-150")
+        code, out, err = run(["orden", "--ahora", "2026-11-11 10:15"])
+        self.assertEqual(code, 2)                             # una acción con una cuenta de firma
+        self.assertIn("cuenta de firma", err)
 
 
 if __name__ == "__main__":

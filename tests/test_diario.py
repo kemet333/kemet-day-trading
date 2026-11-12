@@ -143,5 +143,52 @@ class TestDiario(Base):
             self.assertEqual(fh.readline().strip(), out.splitlines()[0])
 
 
+# Un CSV de acciones (sintético salvo la fila del 11/11, que es la ruptura del rango de 15 min de TSLA del fixture real: entrada 393,08 a
+# las 10:15, stop 389,51; el stop saltó a las 15:50) con una cuenta propia de 5.000 $, 50 $ por operación y 150 $ al día.
+CSV_ACCIONES = """fecha,hora,simbolo,lado,acciones,entrada,salida,stop,pnl,nota
+2026-11-10,09:40,AAPL,largo,10,270.10,268.90,268.50,,entrada en la apertura
+2026-11-10,10:20,TSLA,largo,9,378.40,381.10,375.80,,
+2026-11-11,10:15,TSLA,largo,9,393.08,389.51,389.51,-32.13,ruptura del rango de 15 min; stop a las 15:50
+2026-11-11,13:05,TSLA,largo,20,391.00,389.50,388.00,,20 acciones: 60 $ de riesgo
+"""
+CONFIG_PROPIA = {"mercado": "TSLA", "tipo_cuenta": "propia", "cuenta": "propia", "cuenta_nombre": "Cuenta propia · 5.000 $", "presupuesto": 5000,
+                 "perdida_max_dia": 150, "riesgo_por_operacion": 50, "fallos_y_paras": 3, "sin_entradas_antes": "09:45", "sin_entradas_despues": "15:00",
+                 "plano_a": "15:55", "hora_limite": None, "papel": True}
+
+
+class Acciones(Base):
+    def setUp(self):
+        super().setUp()
+        comun.escribir_json(os.path.join(self.kemet, "config.json"), CONFIG_PROPIA)
+        os.remove(os.path.join(self.kemet, "agenda.json"))
+        self.csv = os.path.join(self.dir, "acciones.csv")
+        with open(self.csv, "w", encoding="utf-8") as fh:
+            fh.write(CSV_ACCIONES)
+
+    def test_csv_de_acciones(self):
+        code, out, err = run(["revisar", self.csv, "--ahora", "2026-11-11 16:30", "--json"])
+        self.assertEqual(code, 1, err)
+        doc = json.loads(out)
+        self.assertEqual((doc["operaciones"], doc["mercado"], doc["config"]["riesgo_por_operacion"], doc["config"]["hora_limite_ny"]), (4, "TSLA", 50.0, None))
+        ops = doc["detalle"]
+        self.assertEqual([o["mercado"] for o in ops], ["AAPL", "TSLA", "TSLA", "TSLA"])
+        self.assertEqual((ops[0]["contratos"], ops[0]["punto"], ops[0]["pnl"], ops[0]["riesgo_usd"]), (10, 1.0, -12.0, 16.0))   # 1 $ por acción, sin micros
+        self.assertEqual((ops[1]["pnl"], ops[2]["pnl"], ops[3]["pnl"], ops[3]["riesgo_usd"]), (24.3, -32.13, -30.0, 60.0))
+        c = {k: v["n"] for k, v in doc["cumplimiento"].items()}
+        self.assertEqual((c["sin_stop"], c["apertura"], c["tamano"], c["stop_ampliado"], c["plano"], c["tras_limite"]), (0, 1, 1, 0, 0, 0))
+        self.assertEqual(doc["cumplimiento"]["tamano"]["operaciones"], ["11/11 13:05 largo 20 TSLA -30 $"])
+        self.assertFalse(doc["cumplimiento"]["hora_limite"]["medible"])     # una cuenta propia no tiene hora límite
+        self.assertEqual([r["clave"] for r in doc["rupturas"]], ["apertura", "tamano"])
+        self.assertIn("salió en el stop con -32 $", doc["bien"][0])
+        code, out, err = run(["revisar", self.csv, "--ahora", "2026-11-11 16:30", "--desde", "2026-11-11"])
+        self.assertIn("Mañana como mucho 15 acciones de TSLA con stop de 3,29 $ por acción (50,00 $ de riesgo por operación)", out)   # la mediana de los stops del CSV
+        self.assertNotIn("MNQ", out)
+
+    def test_plantilla_con_el_ejemplo_de_acciones(self):
+        code, out, err = run(["plantilla"])
+        self.assertEqual(out.splitlines()[0], "fecha,hora,simbolo,lado,contratos,entrada,salida,stop,pnl,nota")
+        self.assertIn("2026-11-11,10:15,TSLA,largo,9,393.08,389.51,389.51,-32.13", out)
+
+
 if __name__ == "__main__":
     unittest.main()

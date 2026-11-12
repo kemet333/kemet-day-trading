@@ -1,4 +1,4 @@
-"""Forma del pack: las once carpetas, una copia idéntica de comun.py en cada tool, frontmatter y bloque de seguridad,
+"""Forma del pack: las dieciséis carpetas, una copia idéntica de comun.py en cada tool, frontmatter y bloque de seguridad,
 sin guiones largos ni emojis en lo que lee el usuario."""
 import json
 import os
@@ -7,11 +7,12 @@ import unittest
 
 from _load import ROOT
 
-SKILLS = ["kemet-desk", "kemet-niveles", "kemet-plan", "kemet-entrada", "kemet-salida", "kemet-maquina",
-          "kemet-tamano", "kemet-riesgo", "kemet-alertas", "kemet-diario", "kemet-geometria"]
-TOOLS = {"kemet-niveles": "niveles", "kemet-plan": "plan", "kemet-entrada": "entrada", "kemet-salida": "salida", "kemet-maquina": "maquina",
-         "kemet-tamano": "tamano", "kemet-riesgo": "riesgo", "kemet-alertas": "alertas", "kemet-diario": "diario"}
-SEGURIDAD = "Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo."
+SKILLS = ["kemet-desk", "kemet-scanner", "kemet-noticias", "kemet-niveles", "kemet-plan", "kemet-entrada", "kemet-salida", "kemet-maquina",
+          "kemet-tamano", "kemet-riesgo", "kemet-broker", "kemet-alertas", "kemet-diario", "kemet-resultados", "kemet-congreso", "kemet-geometria"]
+TOOLS = {"kemet-scanner": "scanner", "kemet-noticias": "noticias", "kemet-niveles": "niveles", "kemet-plan": "plan", "kemet-entrada": "entrada",
+         "kemet-salida": "salida", "kemet-maquina": "maquina", "kemet-tamano": "tamano", "kemet-riesgo": "riesgo", "kemet-broker": "broker",
+         "kemet-alertas": "alertas", "kemet-diario": "diario", "kemet-resultados": "resultados", "kemet-congreso": "congreso"}
+SEGURIDAD = "Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto"
 FRASE = "La mayoría de los que hacen day trading pierde dinero"
 
 
@@ -26,7 +27,7 @@ def frontmatter(text):
 
 
 class Repo(unittest.TestCase):
-    def test_las_once_carpetas(self):
+    def test_las_dieciseis_carpetas(self):
         found = sorted(d for d in os.listdir(ROOT) if os.path.isfile(os.path.join(ROOT, d, "SKILL.md")))
         self.assertEqual(found, sorted(SKILLS))
 
@@ -76,7 +77,7 @@ class Repo(unittest.TestCase):
                     for palabra in prohibido:
                         self.assertNotIn(palabra, text, os.path.join(base, f) + ": " + palabra)
 
-    def test_readme_nombra_las_once(self):
+    def test_readme_nombra_las_dieciseis(self):
         readme = leer(os.path.join(ROOT, "README.md"))
         for folder in SKILLS:
             self.assertIn("/" + folder, readme, folder)

@@ -277,6 +277,76 @@ class Agenda(Base):
         self.assertEqual(d["ventanas"][0], {"desde": "08:10", "hasta": "08:50", "motivo": "IPC a las 08:30, dato fuerte"})
 
 
+# Cuenta propia de 5.000 $, 50 $ por operación y 150 $ al día (tamano.py config --propia --mercado TSLA). TSLA el 11/11/2026 en el fixture
+# real: ayer 370,43 a 380 con cierre 379,80; apertura de 15 min 386,35 a 392,67.
+CONFIG_PROPIA = {"mercado": "TSLA", "tipo_cuenta": "propia", "firma": None, "cuenta": "propia", "cuenta_nombre": "Cuenta propia · 5.000 $", "presupuesto": 5000,
+                 "efectivo_pct": 10, "max_posicion_pct": 75, "max_orden_usd": 4000, "min_orden_usd": 5, "perdida_max_dia": 150, "riesgo_por_operacion": 50,
+                 "fallos_y_paras": 3, "semaforo": "verde", "max_micro": None, "hora_limite": None, "hora_limite_tz": None, "sin_entradas_antes": "09:45",
+                 "sin_entradas_despues": "15:00", "plano_a": "15:55", "zona_usuario": "Europe/Madrid", "papel": True, "permitir_cortos": False,
+                 "permitir_margen": False, "permitir_opciones": False, "bloqueados": [], "sec_user_agent": "Nombre correo@ejemplo.com"}
+
+
+class CuentaPropiaAcciones(Base):
+    config = CONFIG_PROPIA
+
+    def test_plan_de_tsla_sin_hora_limite_y_en_acciones(self):
+        d = self.doc("--stop", "3.57")
+        self.assertEqual((d["mercado"], d["instrumento"], d["tipo_cuenta"], d["hora_limite"], d["hora_limite_ny"]), ("TSLA", "accion", "propia", None, None))
+        self.assertEqual([(v["desde"], v["hasta"]) for v in d["ventanas"]], [("09:30", "09:45"), ("15:50", "15:55")])
+        self.assertEqual((d["sin_entradas_antes"], d["sin_entradas_despues"], d["plano_a"]), ("09:45", "15:00", "15:55"))
+        t = d["tamano"]
+        self.assertEqual((t["instrumento"], t["perdida_max_dia"], t["riesgo_por_operacion"], t["stop_pts"]), ("accion", 150, 50.0, 3.57))
+        self.assertEqual((t["acciones"], t["acciones_sin_tope"], t["manda"], t["precio_referencia"]), (9, 14, "posición máxima", 379.8))
+        self.assertEqual([(l["nombre"], l["acciones"]) for l in t["limites"]], [("riesgo por operación", 14), ("posición máxima", 9), ("orden máxima", 10), ("efectivo", 11)])
+        self.assertEqual((d["niveles"]["pdh"], d["niveles"]["pdl"], d["niveles"]["pdc"]), (380.0, 370.43, 379.8))
+        self.assertNotIn("onh", d["niveles"])                 # una acción no tiene noche
+        out = self.texto("--stop", "3.57")
+        self.assertIn("Mi tamaño: 9 acciones de TSLA por operación con stop de 3,57 $ por acción (manda posición máxima)", out)
+        self.assertIn("Hora límite: ninguna, es tu cuenta · plano a las 15:55 NY (21:55 Madrid)", out)
+        self.assertIn("Sin sesión nocturna", out)
+        self.assertIn("Mejor franja   09:45–11:30", out)
+        self.assertNotIn("Gamma", out)
+
+    def test_sin_niveles_el_tamano_solo_por_el_riesgo_y_con_agenda_ambar(self):
+        d = self.doc("--stop", "3.57", "--sin-niveles")
+        self.assertEqual((d["tamano"]["acciones"], d["tamano"]["manda"], d["tamano"]["precio_referencia"]), (14, "riesgo por operación", None))
+        self.assertIn("sin precio de referencia", self.texto("--stop", "3.57", "--sin-niveles"))
+        self.escribe("agenda.json", AGENDA)
+        d = self.doc("--stop", "3.57")
+        self.assertEqual(d["semaforo"], "ambar")
+        self.assertEqual((d["tamano"]["perdida_max_dia"], d["tamano"]["riesgo_por_operacion"], d["tamano"]["acciones"], d["tamano"]["manda"]), (75, 25.0, 7, "riesgo por operación"))
+        self.assertEqual([(v["desde"], v["hasta"]) for v in d["ventanas"]], [("08:10", "08:50"), ("09:30", "09:45"), ("13:50", "14:10"), ("15:50", "15:55")])   # la EIA es solo de CL
+        d = self.doc()
+        self.assertNotIn("acciones", d["tamano"])
+        self.assertIn("en dólares por acción", d["nota_tamano"])
+
+    def test_a_las_diez_y_media_la_apertura_y_lo_siguiente(self):
+        d = self.doc(ahora="2026-11-11 10:35")
+        self.assertEqual((d["niveles"]["orh"], d["niveles"]["orl"]), (392.67, 386.35))
+        self.assertNotIn("ibh", d["niveles"])
+        self.assertTrue(d["siguiente"].startswith("Operaciones del plan hasta las 15:00 NY"))
+        d = self.doc(ahora="2026-11-11 08:00")
+        self.assertTrue(d["siguiente"].startswith("Pon el stop"))      # la NYSE aún no abre, pero el plan se escribe antes
+        d = self.doc(ahora="2026-11-26 08:00")                             # Thanksgiving
+        self.assertIn("Mercado cerrado (Thanksgiving)", d["siguiente"])
+
+    def test_un_futuro_con_la_cuenta_propia(self):
+        d = self.doc("--mercado", "NQ", "--stop", "18")
+        self.assertEqual((d["tamano"]["contratos"], d["tamano"]["micro"], d["tamano"]["perdida_max_dia"]), (1, "MNQ", 150))
+        self.assertIn("Mi tamaño: 1 MNQ por operación con stop de 18 pts", self.texto("--mercado", "NQ", "--stop", "18"))
+        self.assertIn("Hora límite: ninguna, es tu cuenta", self.texto("--mercado", "NQ"))
+        self.assertIn("onh", d["niveles"])
+
+
+class AccionConCuentaDeFirma(Base):
+    def test_avisa_y_no_da_tamano_en_acciones(self):
+        d = self.doc("--mercado", "TSLA", "--stop", "3.57")
+        self.assertTrue(any("cuenta propia" in a for a in d["avisos"]))
+        self.assertEqual(d["hora_limite"], "16:59")
+        self.assertIsNone(d["tamano"])
+        self.assertIn("config --propia", d["nota_tamano"])
+
+
 class Proceso(unittest.TestCase):
     def test_kemet_dir_por_entorno_en_un_proceso_aparte(self):
         tmp = tempfile.mkdtemp()

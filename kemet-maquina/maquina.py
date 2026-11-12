@@ -12,6 +12,8 @@ pasar la regla del plan por cada sesión anterior del archivo. Antes de poner na
         --stop 28199 --objetivo 28539.75 --hora-entrada 10:45
     python3 maquina.py chart                             # abanico ASCII de las repeticiones
     python3 maquina.py chart --desde kemet/maquina.json
+    python3 maquina.py run --mercado TSLA --fecha 2026-11-11 --lado largo --entrada 393.08 --stop 389.51 \
+        --objetivo 396.65 --hora-entrada 10:15               # una acción: IB de 15 minutos, dólares por acción
 
 Cómo funcionan las repeticiones (el algoritmo del Time Machine de day-trader-skill, MIT, llevado a futuros):
   1. Velas de 5 minutos de Yahoo (60 días). Se guardan solo las SESIONES REGULARES COMPLETAS del contrato
@@ -58,6 +60,10 @@ una noticia o un día de pánico hacen lo que los últimos 60 días no hicieron.
 Convención de velas: `hora_entrada` es la hora a la que CIERRA la vela del disparo y `barra` su número desde la
 apertura (la vela 1 cierra a las 09:35; la 15, a las 10:45). Las repeticiones empiezan en la vela siguiente.
 Todo en puntos del contrato y en R; los dólares por micro (comun.CONTRATOS) son contexto, nunca un resultado.
+
+Acciones de EE. UU. (--mercado TSLA): el pool son las sesiones completas de 78 velas de 09:30 a 16:00 NY por fecha
+de Nueva York (sin noche), el IB por defecto es de 15 minutos, los precios de Yahoo se redondean al céntimo y 1R se
+dice en dólares por acción. La regla de la historia es la misma.
 """
 import argparse
 import datetime as dt
@@ -80,6 +86,7 @@ MONEDA = 0.05          # umbrales del veredicto, ver el docstring
 CLARO = 0.15
 MUCHOS_NINGUNO = 0.40
 IB_MINUTOS = 60
+IB_MINUTOS_ACCION = 15
 SIN_ENTRADAS_ANTES = "09:45"
 SIN_ENTRADAS_DESPUES = "15:00"
 DIAS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
@@ -99,6 +106,24 @@ def hhmm_min(m):
     return "%02d:%02d" % divmod(m, 60)
 
 
+def es_accion(codigo):
+    return comun.resolver(codigo)["tipo"] == "accion"
+
+
+def unidad(codigo):
+    """Puntos del contrato en un futuro, dólares por acción en una acción."""
+    return "$" if es_accion(codigo) else "pts"
+
+
+def velas_al_tick(ch, codigo):
+    """Una acción: los precios de Yahoo (float32) redondeados al céntimo, como hacen kemet-entrada y kemet-salida. Un futuro queda tal cual."""
+    inst = comun.resolver(codigo)
+    if inst["tipo"] != "accion":
+        return ch
+    t = inst["tick"]
+    return dict(ch, velas=[(b[0], comun.al_tick(b[1], t), comun.al_tick(b[2], t), comun.al_tick(b[3], t), comun.al_tick(b[4], t), b[5]) for b in ch["velas"]])
+
+
 def sesion_min(codigo, dia):
     """(apertura, cierre) en minutos NY de la sesión regular de ese día y cuántas velas de 5 min tiene."""
     o, c = comun.sesion_regular(codigo, dia)
@@ -107,7 +132,7 @@ def sesion_min(codigo, dia):
 
 
 def velas_normales(codigo):
-    o, c = comun.CONTRATOS[codigo]["rth"]
+    o, c = comun.resolver(codigo)["rth"]
     return (minutos(comun.parse_hhmm(c)) - minutos(comun.parse_hhmm(o))) // 5
 
 
@@ -298,7 +323,7 @@ def historia_regla(codigo, sesiones, regla, plan, last):
     """La regla del plan en cada sesión completa anterior: IB de `ib_minutos`, primera vela cerrada después del IB que cierra
     fuera (largo por encima del IB alto, corto por debajo del IB bajo), dentro de la ventana de entradas; stop antes que
     objetivo vela a vela desde la vela siguiente; si no, el cierre de la vela `last`."""
-    tick = comun.CONTRATOS[codigo]["tick"]
+    tick = comun.resolver(codigo)["tick"]
     ib_n = plan["ib_minutos"] // 5
     antes = minutos(comun.parse_hhmm(plan["sin_entradas_antes"]))
     despues = minutos(comun.parse_hhmm(plan["sin_entradas_despues"]))
@@ -414,9 +439,11 @@ def cargar_plan(a, ahora):
 
 
 def normalizar_plan(crudo, origen="flags", cfg=None, ib_minutos=None):
-    codigo = str(crudo.get("mercado") or comun.MICRO_A_CODIGO.get(str(crudo.get("micro") or "").upper()) or "").upper()
-    if codigo not in comun.CONTRATOS:
-        raise KemetError("el plan necesita un mercado de %s, no %r" % ("/".join(sorted(comun.CONTRATOS)), crudo.get("mercado")))
+    try:
+        inst = comun.resolver(crudo.get("mercado") or crudo.get("micro"))
+    except KemetError:
+        raise KemetError("el plan necesita un mercado: un futuro (%s) o un ticker de EE. UU., no %r" % ("/".join(sorted(comun.CONTRATOS)), crudo.get("mercado")))
+    codigo = inst["codigo"]
     lado = str(crudo.get("lado") or "largo").lower()
     if lado not in ("largo", "corto"):
         raise KemetError("lado tiene que ser largo o corto, no %r" % crudo.get("lado"))
@@ -447,7 +474,7 @@ def normalizar_plan(crudo, origen="flags", cfg=None, ib_minutos=None):
     a, z, n = sesion_min(codigo, fecha)
     cfg = cfg or {}
     ib_crudo = crudo.get("ib") if isinstance(crudo.get("ib"), dict) else {}
-    ib_min = int(ib_minutos or ib_crudo.get("minutos") or IB_MINUTOS)
+    ib_min = int(ib_minutos or ib_crudo.get("minutos") or crudo.get("ib_minutos") or (IB_MINUTOS_ACCION if inst["tipo"] == "accion" else IB_MINUTOS))
     if ib_min < 5 or ib_min % 5 or ib_min >= (z - a):
         raise KemetError("los minutos del IB tienen que ser un múltiplo de 5 dentro de la sesión, no %s" % ib_min)
     if k is None:
@@ -458,7 +485,7 @@ def normalizar_plan(crudo, origen="flags", cfg=None, ib_minutos=None):
         raise KemetError("la entrada tiene que cerrar entre %s y %s para dejar velas que repetir (vela %d)"
                          % (hhmm_min(a + 5), hhmm_min(z - 5), k + 1))
     riesgo = round((entrada - stop) if largo else (stop - entrada), 4)
-    c = comun.CONTRATOS[codigo]
+    c = inst
     ib = dict(ib_crudo) if all(x in ib_crudo for x in ("alto", "bajo")) else None
     if ib and "ancho" not in ib:
         ib["ancho"] = round(ib["alto"] - ib["bajo"], 4)
@@ -467,7 +494,7 @@ def normalizar_plan(crudo, origen="flags", cfg=None, ib_minutos=None):
     comun.parse_hhmm(antes, "sin_entradas_antes")
     comun.parse_hhmm(despues, "sin_entradas_despues")
     return {
-        "mercado": codigo, "micro": c["micro"], "fecha": fecha.isoformat(), "lado": lado,
+        "mercado": codigo, "instrumento": c["tipo"], "micro": c["micro"], "fecha": fecha.isoformat(), "lado": lado,
         "entrada": entrada, "hora_entrada": hhmm_min(a + 5 * (k + 1)), "barra": k + 1,
         "stop": stop, "objetivo": objetivo, "riesgo_pts": riesgo,
         "recompensa_pts": round(abs(objetivo - entrada), 4),
@@ -558,9 +585,11 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
     if ch.get("intervalo") and ch["intervalo"] != "5m":
         raise KemetError("los datos son velas de %s; la máquina necesita velas de 5 minutos" % ch["intervalo"])
     codigo = plan["mercado"]
-    c = comun.CONTRATOS[codigo]
+    c = comun.resolver(codigo)
+    accion = c["tipo"] == "accion"
     tick = c["tick"]
     fecha = dt.date.fromisoformat(plan["fecha"])
+    ch = velas_al_tick(ch, codigo)
     velas_ = comun.velas_cerradas(ch, ahora)
     if not velas_:
         raise KemetError("no hay velas de 5 minutos cerradas de %s en los datos" % codigo)
@@ -571,7 +600,7 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
     last = indice_cierre(codigo, fecha, hasta, "--hasta")
     if last <= k:
         raise KemetError("--hasta %s no deja nada que repetir después de la entrada de las %s" % (hasta, plan["hora_entrada"]))
-    dias = comun.por_dia(velas_)
+    dias = comun.por_dia(velas_, codigo)
     sesiones, cortas = sesiones_completas(codigo, dias, fecha)
     if len(sesiones) < MIN_SESIONES:
         raise KemetError("solo %d sesión(es) completa(s) de %s antes del %s en los datos; la máquina necesita al menos %d"
@@ -588,9 +617,10 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
     elif not vela_k[3] - tick <= plan["entrada"] <= vela_k[2] + tick:
         avisos.append("la entrada del plan %s queda fuera del rango de esa vela, %s a %s"
                       % (comun.pts(plan["entrada"]), comun.pts(vela_k[3]), comun.pts(vela_k[2])))
-    if fecha.isoformat() in comun.CME_RECORTADO:
+    recortados = comun.NYSE_RECORTADO if accion else comun.CME_RECORTADO
+    if fecha.isoformat() in recortados:
         avisos.append("el %s es sesión recortada (%s): la sesión regular cierra a las %s NY"
-                      % (fecha_es(fecha), comun.CME_RECORTADO[fecha.isoformat()], hhmm_min(z)))
+                      % (fecha_es(fecha), recortados[fecha.isoformat()], hhmm_min(z)))
     pool = construir_pool(sesiones, n)
     mc = simular(pool, plan["entrada"], plan["stop"], plan["objetivo"], k, last, repeticiones, semilla, ventana, plan["lado"] == "largo")
     mc.update(hasta=hhmm_min(a + 5 * (last + 1)), sesiones_pool=len(sesiones), pool_desde=sesiones[0][0].isoformat(),
@@ -622,7 +652,9 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
 def informe(doc, ahora=None):
     p, m, h = doc["plan"], doc["mc"], doc["historia"]
     codigo = p["mercado"]
-    c = comun.CONTRATOS[codigo]
+    c = comun.resolver(codigo)
+    accion = c["tipo"] == "accion"
+    u = unidad(codigo)
     largo = p["lado"] == "largo"
     fecha = dt.date.fromisoformat(p["fecha"])
     hasta = m["hasta"]
@@ -631,9 +663,10 @@ def informe(doc, ahora=None):
         cab += " (%s)" % comun.hora_doble(ahora)
     lineas = [
         cab,
-        "%s %s: entrada %s a las %s (vela %d), stop %s (%s pts), objetivo %s (%s pts, %sR)."
-        % (codigo, p["lado"], comun.pts(p["entrada"]), p["hora_entrada"], p["barra"], comun.pts(p["stop"]), comun.pts(p["riesgo_pts"]),
-           comun.pts(p["objetivo"]), comun.pts(p["recompensa_pts"]), erres(m["r_objetivo"])),
+        "%s %s: entrada %s a las %s (vela %d), stop %s (%s %s), objetivo %s (%s %s, %sR)."
+        % (codigo, p["lado"], comun.pts(p["entrada"]), p["hora_entrada"], p["barra"], comun.pts(p["stop"]), comun.pts(p["riesgo_pts"]), u,
+           comun.pts(p["objetivo"]), comun.pts(p["recompensa_pts"]), u, erres(m["r_objetivo"])),
+        ("1R = %s por acción. Es contexto del tamaño, no un resultado esperado." % dinero(p["riesgo_pts"])) if accion else
         "1R = %s pts = %s por %s (%s por %s). Es contexto del tamaño, no un resultado esperado."
         % (comun.pts(p["riesgo_pts"]), dinero(p["riesgo_usd_micro"]), c["micro"], dinero(p["riesgo_usd_mini"]), c["mini"]),
         "%s repeticiones del resto de la sesión, de %s a %s (%d velas de 5 minutos), semilla %d."
@@ -649,7 +682,7 @@ def informe(doc, ahora=None):
         "",
         "  Precio a las %s: mediana %s, el 90 %% de las repeticiones entre %s y %s."
         % (hasta, comun.pts(m["mediana_cierre"]), comun.pts(m["p5"]), comun.pts(m["p95"])),
-        "  R media: %s (1R = %s pts; +%sR en el objetivo, -1R en el stop)." % (signo(m["r_media"]), comun.pts(p["riesgo_pts"]), erres(m["r_objetivo"])),
+        "  R media: %s (1R = %s %s; +%sR en el objetivo, -1R en el stop)." % (signo(m["r_media"]), comun.pts(p["riesgo_pts"]), u, erres(m["r_objetivo"])),
         "",
     ]
     if h.get("disparos"):
@@ -734,7 +767,8 @@ def cmd_run(a):
         print("\n".join(informe(doc, ahora)))
         if ruta:
             print("Escrito %s." % ruta)
-        print("Siguiente: kemet-tamano dice cuántos micros caben con este stop en tu cuenta; kemet-riesgo lo comprueba.")
+        print("Siguiente: kemet-tamano dice %s caben con este stop en tu cuenta; kemet-riesgo lo comprueba." % (
+            "cuántas acciones" if doc["plan"].get("instrumento") == "accion" else "cuántos micros"))
     return 0
 
 
@@ -759,7 +793,7 @@ def main(argv=None):
 
     def comunes(p):
         p.add_argument("--plan", metavar="RUTA", help="el plan de kemet-salida (por defecto kemet/plan.json)")
-        p.add_argument("--mercado", help="o el plan por flags: ES, NQ, CL o GC")
+        p.add_argument("--mercado", "--simbolo", dest="mercado", help="o el plan por flags: un futuro (ES, NQ, CL, GC...) o un ticker de EE. UU. (TSLA)")
         p.add_argument("--fecha", help="el día del plan, AAAA-MM-DD (por defecto hoy en Nueva York)")
         p.add_argument("--lado", default="largo", choices=["largo", "corto"])
         p.add_argument("--entrada", type=float)

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Niveles de sesión de ES, NQ, CL y GC con velas de 5 minutos de Yahoo (gratis, sin clave). Solo biblioteca estándar.
+"""Niveles de sesión de futuros (ES, NQ, CL, GC...) y de acciones de EE. UU. (TSLA) con velas de 5 minutos de Yahoo
+(gratis, sin clave). Solo biblioteca estándar.
 
     python3 niveles.py                              # el mercado de kemet/config.json (NQ si no hay)
     python3 niveles.py --mercado ES --escribir      # guarda kemet/niveles.json
     python3 niveles.py --todos                      # ES, NQ, CL y GC
     python3 niveles.py --ahora "2026-11-11 16:30" --offline tests/fixtures/yahoo --json
+    python3 niveles.py --mercado TSLA               # una acción: sin noche, apertura y balance inicial de 15 minutos
 
 Lo que un trader de futuros marca antes de abrir y nadie tuvo que teclear: máximo, mínimo y cierre de la sesión
 regular anterior (el cierre de la última vela de 5 minutos hace de liquidación), el rango nocturno desde las 18:00 NY,
@@ -15,6 +17,10 @@ precio respecto a todo eso. Niveles, no señales: ni dirección, ni objetivos, n
 Puerto de `intelligence/app/levels.py` de Kemet a velas de 5 minutos. El día de negociación de CME empieza a las
 18:00 NY de la víspera; la sesión regular es 09:30–16:00 en ES y NQ, 09:00–14:30 en CL y 08:20–13:30 en GC. Yahoo va
 unos 10 minutos por detrás de CME: el «último» es el cierre de la última vela cerrada, nunca la cinta.
+
+Una acción (--mercado TSLA): el día es la fecha de Nueva York, sin sesión nocturna (no hay ONH ni ONL), sesión regular
+de 09:30 a 16:00 (13:00 en los días recortados de la NYSE), apertura y balance inicial de 15 minutos (--ib-minutos
+para otro), niveles al céntimo y el rango medio en dólares por acción. Fin de semana y festivos de la NYSE: cerrado.
 
 Código de salida 0 si hay niveles, 1 si no hay sesión anterior en el histórico, 2 si hay un error.
 """
@@ -27,6 +33,7 @@ import comun
 from comun import KemetError
 
 CODIGOS = ("ES", "NQ", "CL", "GC")
+IB_FUTURO, IB_ACCION = 60, 15
 RANGOS = ("60d", "5d")          # 60 días (los que Yahoo guarda en 5 min) para el rango medio de 20 sesiones; sin conexión vale uno de 5
 DIAS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
 ETIQUETAS = {"pdh": "máximo de ayer", "pdl": "mínimo de ayer", "pdc": "cierre de ayer", "onh": "máximo nocturno",
@@ -34,6 +41,30 @@ ETIQUETAS = {"pdh": "máximo de ayer", "pdl": "mínimo de ayer", "pdc": "cierre 
              "ibh": "máximo del balance inicial", "ibl": "mínimo del balance inicial", "tdh": "máximo de hoy", "tdl": "mínimo de hoy"}
 CLAVES = ("pdh", "pdl", "pdc", "onh", "onl", "orh", "orl", "ibh", "ibl", "tdh", "tdl")
 FUENTE = "velas de 5 min de Yahoo (gratis, ~10 min de retraso)"
+FUENTE_ACCION = "velas de 5 min de Yahoo (gratis, pueden ir con retraso)"
+
+
+def es_accion(codigo):
+    return comun.resolver(codigo)["tipo"] == "accion"
+
+
+def dia_de(codigo, utc):
+    """El día de negociación de CME en un futuro; la fecha de Nueva York en una acción."""
+    ny = comun.a_ny(utc)
+    return ny.date() if es_accion(codigo) else comun.dia_negociacion(ny)
+
+
+def cerrado_hoy(codigo, utc):
+    """(cerrado, motivo): Globex cerrado en un futuro; fin de semana o festivo de la NYSE en una acción."""
+    if not es_accion(codigo):
+        g, motivo = comun.estado_globex(utc)
+        return g == "cerrado", motivo
+    d = comun.a_ny(utc).date()
+    if d.isoformat() in comun.NYSE_CERRADO:
+        return True, comun.NYSE_CERRADO[d.isoformat()]
+    if d.weekday() >= 5:
+        return True, ("sábado", "domingo")[d.weekday() - 5]
+    return False, None
 
 
 # ---------------------------------------------------------------- datos
@@ -65,26 +96,31 @@ def fecha_es(d):
 
 # ---------------------------------------------------------------- el cálculo
 
-def calcular(codigo, ch, ahora_utc):
-    """Niveles de un contrato a una hora dada. Devuelve el documento de kemet/niveles.json o None sin sesión anterior."""
+def calcular(codigo, ch, ahora_utc, ib_minutos=None):
+    """Niveles de un instrumento (futuro o acción) a una hora dada. Devuelve el documento de kemet/niveles.json o None sin sesión anterior.
+    `ib_minutos` None: 60 en un futuro, 15 en una acción."""
+    inst = comun.resolver(codigo)
+    codigo = inst["codigo"]
+    accion = inst["tipo"] == "accion"
+    ib_minutos = ib_minutos or (IB_ACCION if accion else IB_FUTURO)
     cerradas = comun.velas_cerradas(ch, ahora_utc)
     if not cerradas:
         return None
-    dias = comun.por_dia(cerradas)
-    hoy = comun.dia_negociacion(comun.a_ny(ahora_utc))
+    dias = comun.por_dia(cerradas, codigo)
+    hoy = dia_de(codigo, ahora_utc)
     previos = [d for d in dias if d < hoy and comun.regular(codigo, dias[d], d)]
     if not previos:
         return None
     ayer = previos[-1]
     rth_ayer = comun.regular(codigo, dias[ayer], ayer)
     ultima = cerradas[-1]
-    doc = {"generado": comun.iso(ahora_utc), "mercado": codigo, "fecha": hoy.isoformat(), "sesion_anterior": ayer.isoformat(),
+    doc = {"generado": comun.iso(ahora_utc), "mercado": codigo, "instrumento": inst["tipo"], "fecha": hoy.isoformat(), "sesion_anterior": ayer.isoformat(),
            "ultimo": ultima[4], "ultimo_hora": comun.hhmm(comun.a_ny(comun.utc_de_ts(ultima[0] + ch["paso"]))),
            "pdh": max(b[2] for b in rth_ayer), "pdl": min(b[3] for b in rth_ayer), "pdc": rth_ayer[-1][4]}
     apertura, cierre = comun.sesion_regular(codigo, hoy)
     t_ap = comun.ts_de_utc(apertura)
     velas_hoy = dias.get(hoy, [])
-    noche = [b for b in velas_hoy if b[0] < t_ap]
+    noche = [b for b in velas_hoy if b[0] < t_ap] if not accion else []
     if noche:
         doc["onh"], doc["onl"] = comun.rango(noche)
     rth = comun.regular(codigo, velas_hoy, hoy)
@@ -92,17 +128,20 @@ def calcular(codigo, ch, ahora_utc):
     if rth:
         if ahora_ts >= t_ap + 15 * 60:
             doc["orh"], doc["orl"] = comun.rango([b for b in rth if b[0] < t_ap + 15 * 60])
-        ib = comun.balance_inicial(codigo, velas_hoy, hoy)
+        ib = comun.balance_inicial(codigo, velas_hoy, hoy, ib_minutos)
         if ib:
             doc["ibh"], doc["ibl"], doc["ib_ancho"], doc["ib_velas"] = ib["alto"], ib["bajo"], ib["ancho"], ib["velas"]
         doc["tdh"], doc["tdl"] = comun.rango(rth)
-    globex, motivo = comun.estado_globex(ahora_utc)
-    if globex == "cerrado":
+    doc["ib_minutos"] = ib_minutos
+    cerrado, motivo = cerrado_hoy(codigo, ahora_utc)
+    if cerrado:
         doc["sesion"], doc["mercado_cerrado"] = "cerrado", motivo
     elif apertura <= ahora_utc < cierre:
         doc["sesion"] = "rth"
     elif ahora_utc < apertura:
-        doc["sesion"] = "nocturna"
+        doc["sesion"] = "nocturna" if not accion else "cerrado"
+        if accion:
+            doc["antes_apertura"] = True
     else:
         doc["sesion"] = "cerrado"
     o_ayer, c_ayer = comun.sesion_regular(codigo, ayer)
@@ -118,7 +157,7 @@ def calcular(codigo, ch, ahora_utc):
     if rangos:
         doc["rango_medio_20"] = round(sum(rangos) / len(rangos), 2)
         doc["rango_medio_sesiones"] = len(rangos)
-    tick = comun.CONTRATOS[codigo]["tick"]
+    tick = inst["tick"]
     for k in CLAVES + ("ultimo", "ib_ancho"):
         if k in doc:
             doc[k] = comun.al_tick(doc[k], tick)
@@ -130,36 +169,42 @@ def calcular(codigo, ch, ahora_utc):
 # ---------------------------------------------------------------- texto
 
 def lineas(doc, codigo, ahora_utc):
-    c = comun.CONTRATOS[codigo]
+    c = comun.resolver(codigo)
+    accion = c["tipo"] == "accion"
     sesion = {"rth": "sesión regular abierta", "nocturna": "sesión nocturna", "cerrado": "sesión regular cerrada"}[doc["sesion"]]
     if "mercado_cerrado" in doc:
         sesion = "mercado cerrado (%s)" % doc["mercado_cerrado"]
-    out = ["%s · %s · %s · %s · %s" % (codigo, fecha_es(dt.date.fromisoformat(doc["fecha"])), comun.hora_doble(ahora_utc), FUENTE, sesion),
+    elif doc.get("antes_apertura"):
+        sesion = "antes de la apertura (09:30 NY)"
+    out = ["%s · %s · %s · %s · %s" % (codigo, fecha_es(dt.date.fromisoformat(doc["fecha"])), comun.hora_doble(ahora_utc), FUENTE_ACCION if accion else FUENTE, sesion),
            "Último %s (cierre de la vela de las %s NY)" % (comun.num(doc["ultimo"], 2), doc["ultimo_hora"]),
            "  %-34s máximo %s   mínimo %s   cierre %s" % ("Ayer (sesión regular %s)" % doc["sesion_anterior"], comun.pts(doc["pdh"]), comun.pts(doc["pdl"]), comun.pts(doc["pdc"]))]
     if "sesion_anterior_incompleta" in doc:
         out[-1] += "   (sesión incompleta en los datos: %d velas, los niveles pueden cambiar)" % doc["sesion_anterior_incompleta"]
     if "onh" in doc:
         out.append("  %-34s máximo %s   mínimo %s" % ("Noche (desde 18:00 NY)", comun.pts(doc["onh"]), comun.pts(doc["onl"])))
-    else:
+    elif not accion:
         out.append("  %-34s sin velas todavía" % "Noche (desde 18:00 NY)")
     apertura = c["rth"][0]
+    ib_min = doc.get("ib_minutos") or IB_FUTURO
+    etiqueta_ib = "Balance inicial 1 h" if ib_min == 60 else "Balance inicial %d min" % ib_min
     if "orh" in doc:
         out.append("  %-34s máximo %s   mínimo %s" % ("Apertura 15 min", comun.pts(doc["orh"]), comun.pts(doc["orl"])))
     else:
         out.append("  %-34s %s" % ("Apertura 15 min", _pendiente(doc, apertura, 15)))
     if "ibh" in doc:
-        out.append("  %-34s máximo %s   mínimo %s   ancho %s (%d velas)" % ("Balance inicial 1 h", comun.pts(doc["ibh"]), comun.pts(doc["ibl"]), comun.pts(doc["ib_ancho"]), doc["ib_velas"]))
+        out.append("  %-34s máximo %s   mínimo %s   ancho %s (%d velas)" % (etiqueta_ib, comun.pts(doc["ibh"]), comun.pts(doc["ibl"]), comun.pts(doc["ib_ancho"]), doc["ib_velas"]))
     else:
-        out.append("  %-34s %s" % ("Balance inicial 1 h", _pendiente(doc, apertura, 60)))
+        out.append("  %-34s %s" % (etiqueta_ib, _pendiente(doc, apertura, ib_min)))
     if "tdh" in doc:
         out.append("  %-34s máximo %s   mínimo %s" % ("Hoy (sesión regular)", comun.pts(doc["tdh"]), comun.pts(doc["tdl"])))
     else:
         out.append("  %-34s sin sesión regular todavía" % "Hoy (sesión regular)")
     if "rango_medio_20" in doc:
         n = doc["rango_medio_sesiones"]
-        out.append("  %-34s %s puntos (media de máximo menos mínimo de %s, para dimensionar el stop)" % (
-            "Rango medio de sesión", comun.num(doc["rango_medio_20"], 2), "las últimas 20 sesiones" if n >= 20 else ("1 sesión, la que hay" if n == 1 else "%d sesiones, las que hay" % n)))
+        out.append("  %-34s %s %s (media de máximo menos mínimo de %s, para dimensionar el stop)" % (
+            "Rango medio de sesión", comun.num(doc["rango_medio_20"], 2), "$ por acción" if accion else "puntos",
+            "las últimas 20 sesiones" if n >= 20 else ("1 sesión, la que hay" if n == 1 else "%d sesiones, las que hay" % n)))
     pos = doc["posicion"]
     partes = []
     for estado, palabra in (("encima", "por encima"), ("debajo", "por debajo"), ("en", "justo en")):
@@ -173,7 +218,7 @@ def lineas(doc, codigo, ahora_utc):
 def _pendiente(doc, apertura, minutos):
     if doc["sesion"] == "rth":
         return "formándose, cierra a las %s" % _mas(apertura, minutos)
-    if doc["sesion"] == "nocturna":
+    if doc["sesion"] == "nocturna" or doc.get("antes_apertura"):
         return "a las %s NY" % _mas(apertura, minutos)
     return "no hay" + (" (%s)" % doc["mercado_cerrado"] if "mercado_cerrado" in doc else "")
 
@@ -193,30 +238,31 @@ def _corto(k):
 
 def mercado_por_defecto():
     cfg = comun.leer_json("config.json", obligatorio=False) or {}
-    m = (cfg.get("mercado") or "NQ").upper()
-    return m if m in comun.CONTRATOS else "NQ"
+    try:
+        return comun.resolver(cfg.get("mercado") or "NQ")["codigo"]
+    except KemetError:
+        return "NQ"
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--mercado", help="ES, NQ, CL o GC (por defecto el de kemet/config.json, y si no hay, NQ)")
+    p.add_argument("--mercado", "--simbolo", dest="mercado", help="un futuro (ES, NQ, CL, GC...) o un ticker de EE. UU. (TSLA); por defecto el de kemet/config.json, y si no hay, NQ")
     p.add_argument("--todos", action="store_true", help="los cuatro contratos")
+    p.add_argument("--ib-minutos", dest="ib_minutos", type=int, choices=(15, 30, 60), help="minutos del balance inicial (60 en futuros, 15 en acciones)")
     p.add_argument("--escribir", action="store_true", help="guarda kemet/niveles.json")
     p.add_argument("--ahora", help='hora de Nueva York, "AAAA-MM-DD HH:MM"')
     p.add_argument("--offline", help="archivo JSON de Yahoo (.json o .json.gz) o la carpeta tests/fixtures/yahoo")
     p.add_argument("--json", action="store_true")
     a = p.parse_args(argv)
     ahora = comun.parse_ahora(a.ahora)
-    principal = (a.mercado or mercado_por_defecto()).upper()
-    if principal not in comun.CONTRATOS:
-        raise KemetError("mercado %s no soportado: %s" % (principal, ", ".join(CODIGOS)))
+    principal = comun.resolver(a.mercado or mercado_por_defecto())["codigo"]
     codigos = list(CODIGOS) if a.todos else [principal]
     if a.todos and principal not in codigos:
         codigos.insert(0, principal)
     docs, fallos = {}, {}
     for cod in codigos:
         try:
-            doc = calcular(cod, cargar(cod, a.offline), ahora)
+            doc = calcular(cod, cargar(cod, a.offline), ahora, a.ib_minutos if cod == principal else None)
         except KemetError as e:
             fallos[cod] = str(e)
             continue

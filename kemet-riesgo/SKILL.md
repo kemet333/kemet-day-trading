@@ -7,10 +7,13 @@ description: >-
   operación, suma del día dentro de la pérdida máxima del día, no más de tres operaciones (tres fallos y
   paras), contratos dentro del tope de la cuenta, fuera de las ventanas de datos y de la apertura
   09:30–09:45, dentro del horario de entradas, antes de la hora de estar plano y de la hora límite de la
-  firma, Globex abierto, sin duplicados. Una orden de cierre nunca se bloquea por los límites del día. Lleva
-  el día en kemet/estado/dia.json: qué pusiste, qué cerraste, cuánto queda. Úsala cuando el usuario diga
-  «comprueba mi orden», «puedo entrar», «cuánto llevo arriesgado hoy», «me queda margen», «apunta que he
-  cerrado con -120», «cómo va el día», o siempre después de kemet-tamano y antes de poner nada.
+  firma, Globex abierto, sin duplicados. En acciones con la cuenta propia (órdenes en el formato de Alpaca),
+  además: reloj de la NYSE, bloqueados, tamaño mínimo y máximo, posición, efectivo con colchón, cortos y
+  opciones sin permiso, y lo que kemet-broker colocó hoy. Una orden de cierre nunca se bloquea por los
+  límites del día. Lleva el día en kemet/estado/dia.json: qué pusiste, qué cerraste, cuánto queda. Úsala
+  cuando el usuario diga «comprueba mi orden», «puedo entrar», «puedo comprar TSLA», «cuánto llevo arriesgado
+  hoy», «me queda margen», «apunta que he cerrado con -120», «cómo va el día», o siempre después de
+  kemet-tamano y antes de poner nada o de que kemet-broker lea el ticket.
 argument-hint: "[check | registrar --abrir | registrar --resultado -120 | hoy]"
 ---
 
@@ -39,17 +42,21 @@ toca parar (día agotado o tres operaciones).
 
 | archivo | qué |
 | --- | --- |
-| `kemet/orden.json` | las órdenes propuestas (kemet-tamano); una con `"cierre": true` solo saca de una posición |
-| `kemet/config.json` | los límites de tu cuenta y los tuyos (kemet-tamano `config`); sin él, valores por defecto y lo dice |
+| `kemet/orden.json` | las órdenes propuestas (kemet-tamano): en contratos (futuros) o en el formato de `place_stock_order` de Alpaca (acciones, `"instrumento": "accion"`); una con `"cierre": true` solo saca de una posición |
+| `kemet/config.json` | los límites de tu cuenta y los tuyos (kemet-tamano `config`, de firma o `--propia`); sin él, valores por defecto y lo dice |
 | `kemet/agenda.json` | los datos del día (kemet-plan `agenda`): ventanas de ±10 minutos, ±20 si `fuerte` |
 | `kemet/estado/dia.json` | lo que has puesto y cerrado hoy; lo escribe `registrar` |
+| `kemet/estado/broker.json` | lo que kemet-broker colocó hoy en papel: cuenta como operación, en el día (su pérdida al stop) y para los duplicados |
+| `kemet/portfolio.json` | (acciones) efectivo y posiciones, de kemet-broker: una venta de lo que tienes es un cierre; sin él, el presupuesto del config |
+| `kemet/precios.json` | (acciones) el último precio de kemet-alertas: con menos de 15 minutos y por encima de la entrada del plan, el riesgo se mide desde él |
 | `kemet/estado/riesgo.json` | los veredictos del último `check`, con la huella de cada orden |
 
 ## Entradas y cierres
 
-Una **entrada** abre o añade posición. Un **cierre** (`"cierre": true`) solo saca de una. Salir siempre
-tiene que ser posible: a un cierre se le mira el formato y que Globex esté abierto; todo lo demás se
-convierte en aviso, nunca en BLOCK.
+Una **entrada** abre o añade posición. Un **cierre** (`"cierre": true`, o en acciones una venta de lo que
+tienes en `kemet/portfolio.json`) solo saca de una. Salir siempre tiene que ser posible: a un cierre se le
+mira el formato y que el mercado esté abierto (Globex o la NYSE); todo lo demás se convierte en aviso, nunca
+en BLOCK.
 
 ## Las comprobaciones
 
@@ -72,6 +79,26 @@ que caben por separado y no juntas se detectan.
 Avisos que no bloquean, pero se dicen: la regla de consistencia de la firma (aquí no se puede medir), una
 cuenta real (`"papel": false`), la hora límite en Chicago con su equivalente en NY, sin config, sin agenda.
 
+En una acción (cuenta propia; la orden lleva `symbol`, `side` buy|sell, `qty`, `type`, `time_in_force`,
+`order_class` bracket, `take_profit_limit_price`, `stop_loss_stop_price`, `plan`, `instrumento`), además:
+
+| comprobación | bloquea cuando |
+| --- | --- |
+| formato | el símbolo no es un ticker de EE. UU., `side` no es buy o sell, `qty` no es un entero (acciones enteras), `type` no es market o limit, una limit sin `limit_price`, `time_in_force` que no sea day o gtc, un bracket sin sus dos patas; cantidades y precios que no vayan como texto son solo un aviso |
+| mercado | (todas) la NYSE cerrada: fin de semana, festivo, antes de las 09:30 o después del cierre (13:00 en días recortados) |
+| cuenta | (entradas) la config es de una cuenta de firma: para acciones hace falta `tamano.py config --propia` |
+| opciones | un símbolo OCC con `permitir_opciones: false` |
+| bloqueado | (entradas) el ticker está en `bloqueados` |
+| tamaño | (entradas) acciones × entrada por debajo de `min_orden_usd` o por encima de `max_orden_usd` |
+| posición | (entradas) lo que ya tienes del símbolo más esta compra, por encima de `max_posicion_pct` del presupuesto |
+| efectivo | (entradas) la compra necesita más efectivo del que hay (margen) o deja el efectivo por debajo del colchón `efectivo_pct` |
+| corto | (entradas) vender más de lo que tienes con `permitir_cortos: false` |
+| stop, pérdida, día, operaciones, ventana, horario, duplicado | como arriba, con la pérdida al stop = acciones × (entrada menos stop) y sin hora límite de firma. La entrada que mide es el `limit_price` en una limit; a mercado, la del plan o el último precio de `kemet/precios.json` si es fresco y peor |
+
+Sin `kemet/portfolio.json` el efectivo de partida es el presupuesto del config; sin presupuesto no se miden
+efectivo ni posición y lo avisa. Las órdenes se simulan en orden: una compra que pasa resta su efectivo a la
+siguiente.
+
 Cómo cuentan los números:
 
 - La **pérdida al stop** es contratos × |entrada menos stop| × valor del punto del micro (2 $ en MNQ, 5 $ en
@@ -80,7 +107,12 @@ Cómo cuentan los números:
   las cerradas, según `dia.json`. Por eso importa apuntar: `registrar --abrir` al poner la orden,
   `registrar --resultado` al cerrarla.
 - La **huella** es un sha1 de los campos de la orden (símbolo, lado, contratos, tipo, precio, stop,
-  objetivo, cierre). Una orden editada tiene otra huella y necesita otro `check`.
+  objetivo, cierre; en una acción, los campos de `place_stock_order` más `cierre`), la misma que calcula
+  kemet-broker: un ticket solo sale LISTO si esa huella exacta tiene un PASS de hoy. Una orden editada tiene
+  otra huella y necesita otro `check`.
+- **Lo colocado hoy** según `kemet/estado/broker.json` (estado colocada o llenada) cuenta como operación del
+  día y, si el registro trae su pérdida al stop, en la suma del día; una compra del mismo símbolo ya
+  colocada hoy es un duplicado. Lo que ya está apuntado en `dia.json` con la misma huella no se cuenta dos veces.
 - El **reloj** es el de Nueva York calculado en la herramienta, con el horario de verano, nunca el de tu
   ordenador. `--ahora` lo fija para repetir un día.
 
@@ -157,6 +189,63 @@ Con una agenda que tenga «14:00 Subasta del Tesoro», la misma orden a las 13:5
 las 10:50 con la misma orden ya abierta, por duplicado; a las 15:10, por «sin entradas después de las 15:00».
 A las 15:58, con el día agotado, una venta de 1 MNQ con `"cierre": true` pasa igual: es un cierre.
 
+## Ejemplo: TSLA, miércoles 11 de noviembre de 2026, cuenta propia
+
+Cuenta propia de 5.000 $, 50 $ por operación y 150 $ al día (`tamano.py config --propia`). La orden de
+kemet-tamano para la ruptura del rango de 15 minutos de TSLA ese día (rango 386,35 a 392,67; la vela de las
+10:10 cerró a las 10:15 en 393,08; stop en el punto medio 389,51; objetivo 1R 396,65): compra 9 acciones a
+mercado, bracket, 32,13 $ al stop. Comprobada a las 10:15:
+
+```
+$ python3 riesgo.py check --ahora "2026-11-11 10:15"
+RIESGO · Cuenta propia · 5.000 $ · 2026-11-11 · 16:15 Madrid / 10:15 NY
+AVISO: sin kemet/agenda.json: no conozco los datos de hoy, solo la ventana de la apertura
+
+PASS  #1 compra 9 TSLA, entrada
+          entrada 393,08 $ (entrada del plan), stop 389,51 $, objetivo 396,65 $: riesgo 3,57 $ por acción
+          pérdida al stop 32,13 $ (riesgo por operación 50,00 $) · 9 acciones = 3.537,72 $
+          hoy antes de esta: 0 de 3 operaciones, 0 $ abierto, 0 $ perdido, 0 $ de 150 $ del día
+
+1 PASS, 0 BLOCK a las 10:15 NY (simulación).
+Todo PASS. Un PASS es una comprobación de reglas, no una recomendación: la pones tú, con su stop, y la apuntas con `registrar --abrir`.
+```
+
+Ese día TSLA no llegó al objetivo (máximo 395,43) y el stop saltó a las 15:50:
+
+```
+$ python3 riesgo.py registrar --abrir --ahora "2026-11-11 10:16"
+Abierta a las 10:16 NY: compra 9 TSLA a 393,08, stop 389,51, riesgo 32,13 $ (huella 4cd5e67d8906)
+$ python3 riesgo.py registrar --resultado -32.13 --hora 15:50
+Cerrada a las 15:50 NY: compra 9 TSLA de las 10:16, resultado -32,13 $
+HOY · Cuenta propia · 5.000 $ · 2026-11-11
+  1. 10:16 compra 9 TSLA a 393,08, stop 389,51, riesgo 32,13 $ · cerrada 15:50, -32,13 $
+Operaciones: 1 de 3 · pérdidas: 1 · riesgo abierto 0,00 $ · pérdida realizada 32,13 $ (neto -32,13 $)
+Queda del día: 117,87 $ de 150 $ · 2 operaciones más como mucho
+```
+
+La misma orden con 20 acciones se bloquea cuatro veces:
+
+```
+$ python3 riesgo.py check --ahora "2026-11-11 10:15" --sin-escribir
+BLOCK #1 compra 20 TSLA, entrada
+          entrada 393,08 $ (entrada del plan), stop 389,51 $, objetivo 396,65 $: riesgo 3,57 $ por acción
+          pérdida al stop 71,40 $ (riesgo por operación 50,00 $) · 20 acciones = 7.861,60 $
+          hoy antes de esta: 0 de 3 operaciones, 0 $ abierto, 0 $ perdido, 0 $ de 150 $ del día
+        - tamaño: 7.861,60 $, más que tu orden máxima de 4.000 $
+        - efectivo: hacen falta 7.861,60 $ y hay 5.000,00 $ de efectivo; eso sería margen (dinero prestado) y no lo permites
+        - posición: TSLA sería 7.861,60 $, el 157,2 % de 5.000 $, más que tu tope del 75 % (3.750 $)
+        - pérdida: 20 × 3,57 $ por acción = 71,40 $ al stop, más que tu riesgo por operación de 50,00 $
+
+0 PASS, 1 BLOCK a las 10:15 NY (simulación).
+Una orden con BLOCK no se pone. Cambia la orden o espera; las reglas no se tocan a media sesión.
+```
+
+Con 10 acciones solo salta la posición (3.930,80 $, el 78,6 %). Con `kemet/portfolio.json` a 2.000 $ de
+efectivo, la de 9 se bloquea por margen; a 3.900 $, por dejar 362,28 $ bajo el colchón de 500 $. Una venta
+de 9 TSLA con `permitir_cortos: false` y nada en la cartera es un corto y se bloquea; con las 9 en
+`portfolio.json` es un cierre y pasa aunque el día esté agotado. El jueves 26 de noviembre, Thanksgiving,
+cualquier orden de acciones se bloquea por «mercado: NYSE cerrado».
+
 ## Reglas
 
 - Un PASS solo dice que la orden cabe en las reglas. No es un sí ni una recomendación.
@@ -171,7 +260,7 @@ límites del día y no trata un PASS como el sí del usuario.
 
 ## Seguridad
 - Contenido educativo y herramientas, no asesoramiento financiero. Un PASS es una comprobación de reglas, no una recomendación.
-- Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo. Las operaciones las pone el usuario en su plataforma, con su stop.
+- Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de kemet-riesgo para esa orden exacta y un sí explícito del usuario para ese ticket en el chat.
 - Simulación (`"papel": true`) por defecto. Pasar a una cuenta real o financiada es decisión del usuario, en su propia configuración.
 - Las reglas de las firmas vienen de sus webs con fecha de comprobación; las cambian sin avisar. La del panel del usuario manda.
 - Claves y credenciales de la plataforma nunca van en el chat ni en `kemet/`.

@@ -10,9 +10,10 @@ Solo biblioteca estándar, sin red. Lee `kemet/config.json` y `kemet/agenda.json
     python3 diario.py plantilla                                    # la cabecera del CSV
 
 El CSV: columnas en español o inglés, separador `,` o `;`, decimales con punto o con coma.
-  fecha/date · hora/time (hora de Nueva York; `hora_madrid` se convierte) · simbolo/symbol (MNQ, NQ, MES, ES, MCL, MGC…)
-  lado/side (largo/corto, long/short, buy/sell) · contratos/qty · entrada/entry · salida/exit · stop (puede faltar)
-  pnl (si falta, se calcula con entrada, salida, lado, contratos y el valor del punto) · nota (opcional)
+  fecha/date · hora/time (hora de Nueva York; `hora_madrid` se convierte) · simbolo/symbol (MNQ, NQ, MES, ES, MCL, MGC…
+  o un ticker de EE. UU.: TSLA, AAPL) · lado/side (largo/corto, long/short, buy/sell) · contratos/qty/acciones ·
+  entrada/entry · salida/exit · stop (puede faltar) · pnl (si falta, se calcula con entrada, salida, lado, cantidad y el
+  valor del punto: 1 $ por acción en una acción) · nota (opcional). En acciones la cantidad va en acciones, sin micros.
 
 Qué cuenta (hechos, no calificaciones): operaciones sin stop, entradas en la apertura (09:30–09:45 NY) y en las
 ventanas de datos de kemet/agenda.json si es de un día del archivo, riesgo al stop por encima del riesgo por operación
@@ -47,7 +48,7 @@ COLUMNAS = {
     "hora": ("hora", "time", "hora_ny", "hora_entrada", "entry_time", "time_ny", "hora_madrid", "time_madrid"),
     "simbolo": ("simbolo", "symbol", "mercado", "instrumento", "instrument", "ticker", "contrato", "contract"),
     "lado": ("lado", "side", "direccion", "direction"),
-    "contratos": ("contratos", "qty", "cantidad", "quantity", "size", "contracts"),
+    "contratos": ("contratos", "qty", "cantidad", "quantity", "size", "contracts", "acciones", "shares"),
     "entrada": ("entrada", "entry", "precio_entrada", "entry_price", "avg_entry"),
     "salida": ("salida", "exit", "precio_salida", "exit_price", "avg_exit"),
     "stop": ("stop", "stop_loss", "sl", "stoploss"),
@@ -118,7 +119,7 @@ def madrid_a_ny(fecha, hora):
 
 
 def contrato_de(simbolo):
-    """(código, es_micro, valor del punto) para MNQ, NQ, MNQZ6, NQZ26…; None si no lo conoce."""
+    """(código, es_micro, valor del punto) para MNQ, NQ, MNQZ6, NQZ26… o un ticker de EE. UU. (TSLA: 1 $ por acción); None si no lo conoce."""
     s = str(simbolo or "").strip().upper().replace(" ", "")
     candidatos = [s, s.rstrip("0123456789")]
     if candidatos[-1] and candidatos[-1][-1] in "FGHJKMNQUVXZ" and len(candidatos[-1]) > 2:
@@ -129,7 +130,17 @@ def contrato_de(simbolo):
             return k, True, comun.CONTRATOS[k]["punto_micro"]
         if c in comun.CONTRATOS:
             return c, False, comun.CONTRATOS[c]["punto_mini"]
+    try:
+        inst = comun.resolver(s)
+    except KemetError:
+        return None
+    if inst["tipo"] == "accion":
+        return inst["codigo"], False, 1.0
     return None
+
+
+def es_accion(mercado):
+    return comun.resolver(mercado)["tipo"] == "accion"
 
 
 def mapear_columnas(cabecera):
@@ -190,7 +201,7 @@ def leer_csv(ruta):
                 avisos.append("línea %d: el stop %s está del lado equivocado de la entrada %s; se trata como sin stop" % (n, pts(stop), pts(entrada)))
                 stop = None
             else:
-                riesgo_pts = comun.al_tick(abs(entrada - stop), comun.CONTRATOS[codigo]["tick"])
+                riesgo_pts = comun.al_tick(abs(entrada - stop), comun.resolver(codigo)["tick"])
         ops.append({"linea": n, "fecha": fecha, "hora": hora, "simbolo": v("simbolo").upper(), "mercado": codigo, "micro": es_micro, "punto": punto,
                     "lado": lado, "contratos": contratos, "entrada": entrada, "salida": salida, "stop": stop, "riesgo_pts": riesgo_pts,
                     "riesgo_usd": round(riesgo_pts * punto * contratos, 2) if riesgo_pts else None, "pnl": pnl, "nota": v("nota"),
@@ -243,16 +254,16 @@ def revisar(ops, cfg=None, agenda=None, stop_habitual=None):
     c = cfg or {}
     pmd = c.get("perdida_max_dia")
     fyp = int(c.get("fallos_y_paras") or FALLOS_Y_PARAS)
-    riesgo_op = (pmd / float(fyp)) if pmd else None
+    riesgo_op = float(c["riesgo_por_operacion"]) if c.get("riesgo_por_operacion") else ((pmd / float(fyp)) if pmd else None)
     mercado = (c.get("mercado") or ops[0]["mercado"]).upper()
-    plano = comun.parse_hhmm(c["plano_a"]) if c.get("plano_a") else comun.parse_hhmm(comun.CONTRATOS[ops[0]["mercado"]]["plano"])
+    plano = comun.parse_hhmm(c["plano_a"]) if c.get("plano_a") else comun.parse_hhmm(comun.resolver(ops[0]["mercado"])["plano"])
     limite = hora_limite_ny(c)
     despues = comun.parse_hhmm(c["sin_entradas_despues"]) if c.get("sin_entradas_despues") else None
     ventanas = {f: v for f, v in ventanas_agenda(agenda, mercado).items() if ops[0]["fecha"] <= f <= ops[-1]["fecha"]}
     # por operación
     for o in ops:
         o["franja"] = franja_de(o["hora"])
-        apertura = comun.parse_hhmm(comun.CONTRATOS[o["mercado"]]["rth"][0])
+        apertura = comun.parse_hhmm(comun.resolver(o["mercado"])["rth"][0])
         inf = o["infracciones"]
         if o["stop"] is None:
             inf.append("sin_stop")
@@ -456,6 +467,10 @@ def una_correccion(rupturas, ops, c, riesgo_op, ventanas, plano, despues, stop_h
         stops = [o["riesgo_pts"] for o in ops if o["stop"] is not None]
         stop = float(stop_habitual) if stop_habitual else (comun.mediana(stops) if stops else None)
         o = ops[0]
+        if stop and riesgo_op and es_accion(o["mercado"]):
+            n = int(riesgo_op // stop)
+            return "Mañana como mucho %d acciones de %s con stop de %s por acción (%s de riesgo por operación). Comprobable: acciones × stop ≤ %s en cada fila." % (
+                n, o["mercado"], usd(stop, 2), usd(riesgo_op, 2), usd(riesgo_op, 2))
         if stop and riesgo_op:
             n = int(riesgo_op // (stop * o["punto"]))
             return "Mañana como mucho %d %s con stop de %s pts (%s de riesgo por operación). Comprobable: contratos × stop × %s $ ≤ %s en cada fila." % (
@@ -571,6 +586,8 @@ def cmd_plantilla(a):
     print(PLANTILLA)
     print("# fecha AAAA-MM-DD · hora HH:MM de Nueva York (o llama a la columna hora_madrid) · simbolo MNQ/NQ/MES/ES/MCL/MGC · lado largo/corto")
     print("# contratos entero · entrada, salida y stop en puntos del contrato · pnl en dólares (si falta se calcula) · nota libre")
+    print("# acciones: el ticker en simbolo (TSLA), la cantidad en acciones en contratos (o una columna acciones), precios en dólares por acción")
+    print("# ejemplo de acción: 2026-11-11,10:15,TSLA,largo,9,393.08,389.51,389.51,-32.13,ruptura del rango de 15 min; el stop saltó a las 15:50")
     return 0
 
 

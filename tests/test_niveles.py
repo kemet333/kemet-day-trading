@@ -1,4 +1,5 @@
-"""kemet-niveles sobre el fixture real de NQ (y ES, CL, GC), sin red. Día de ejemplo: miércoles 2026-11-11."""
+"""kemet-niveles sobre el fixture real de NQ (y ES, CL, GC), sin red. Día de ejemplo: miércoles 2026-11-11.
+Acciones: TSLA (fixture real TSLA-60d-5m.json.gz): sin noche, apertura y balance inicial de 15 minutos, niveles al céntimo."""
 import datetime as dt
 import io
 import json
@@ -158,6 +159,64 @@ class Todos(unittest.TestCase):
         self.assertEqual(out.count("Último"), 4)
 
 
+class Acciones(unittest.TestCase):
+    def test_tsla_del_11_11_sin_claves_nocturnas(self):
+        rth_ayer = a_mano("TSLA", dt.date(2026, 11, 10), dt.time(9, 30), dt.time(16, 0))
+        ib = a_mano("TSLA", dt.date(2026, 11, 11), dt.time(9, 30), dt.time(9, 45))
+        self.assertEqual((len(rth_ayer), len(ib)), (78, 3))
+        code, d = doc("2026-11-11 16:30", "--mercado", "TSLA")
+        self.assertEqual(code, 0)
+        self.assertEqual((d["mercado"], d["instrumento"], d["ib_minutos"], d["sesion"], d["sesion_anterior"]), ("TSLA", "accion", 15, "cerrado", "2026-11-10"))
+        for k in ("onh", "onl", "escala"):
+            self.assertNotIn(k, d)
+        self.assertEqual((d["pdh"], d["pdl"], d["pdc"]), (comun.al_tick(max(b[2] for b in rth_ayer), 0.01), comun.al_tick(min(b[3] for b in rth_ayer), 0.01),
+                                                         comun.al_tick(rth_ayer[-1][4], 0.01)))
+        self.assertEqual((d["pdh"], d["pdl"], d["pdc"]), (380.0, 370.43, 379.8))
+        self.assertEqual((d["ibh"], d["ibl"]), (comun.al_tick(max(b[2] for b in ib), 0.01), comun.al_tick(min(b[3] for b in ib), 0.01)))
+        self.assertEqual((d["orh"], d["orl"], d["ibh"], d["ibl"], d["ib_ancho"], d["ib_velas"]), (392.67, 386.35, 392.67, 386.35, 6.32, 3))
+        self.assertEqual((d["tdh"], d["tdl"], d["ultimo"], d["ultimo_hora"]), (395.43, 386.35, 390.8, "16:00"))
+        self.assertEqual((d["rango_medio_20"], d["rango_medio_sesiones"]), (13.11, 20))
+        self.assertEqual(sorted(d["posicion"]), ["ibh", "ibl", "orh", "orl", "pdc", "pdh", "pdl", "tdh", "tdl"])
+        self.assertEqual((d["posicion"]["pdh"], d["posicion"]["ibh"], d["posicion"]["tdh"]), ("encima", "debajo", "debajo"))
+        _, out, _ = run(["--ahora", "2026-11-11 16:30", "--offline", YAHOO, "--mercado", "TSLA"])
+        self.assertIn("TSLA · mié 2026-11-11 · 22:30 Madrid / 16:30 NY · velas de 5 min de Yahoo (gratis, pueden ir con retraso) · sesión regular cerrada", out)
+        self.assertIn("Ayer (sesión regular 2026-11-10)   máximo 380   mínimo 370,43   cierre 379,80", out)
+        self.assertIn("Apertura 15 min                    máximo 392,67   mínimo 386,35", out)
+        self.assertIn("Balance inicial 15 min             máximo 392,67   mínimo 386,35   ancho 6,32 (3 velas)", out)
+        self.assertIn("Rango medio de sesión              13,11 $ por acción", out)
+        self.assertNotIn("Noche", out)
+        self.assertNotIn("nocturno", out)
+
+    def test_antes_de_la_apertura_durante_y_cerrado(self):
+        _, d = doc("2026-11-11 08:00", "--mercado", "TSLA")
+        self.assertEqual((d["sesion"], d.get("antes_apertura"), d["pdc"]), ("cerrado", True, 379.8))
+        for k in ("orh", "ibh", "tdh", "onh"):
+            self.assertNotIn(k, d)
+        _, out, _ = run(["--ahora", "2026-11-11 08:00", "--offline", YAHOO, "--mercado", "TSLA"])
+        self.assertIn("antes de la apertura (09:30 NY)", out)
+        self.assertIn("Balance inicial 15 min             a las 09:45 NY", out)
+        _, d = doc("2026-11-11 09:40", "--mercado", "TSLA")
+        self.assertEqual(d["sesion"], "rth")
+        self.assertNotIn("ibh", d)
+        self.assertIn("tdh", d)
+        _, d = doc("2026-11-11 09:45", "--mercado", "TSLA")                  # la vela de 09:40 cierra a las 09:45
+        self.assertEqual((d["ibh"], d["orh"]), (392.67, 392.67))
+        _, d = doc("2026-11-14 12:00", "--mercado", "TSLA")
+        self.assertEqual((d["sesion"], d["mercado_cerrado"]), ("cerrado", "sábado"))
+        _, d = doc("2026-11-26 12:00", "--mercado", "TSLA")
+        self.assertEqual(d["mercado_cerrado"], "Thanksgiving")
+
+    def test_ticker_por_flag_e_ib_minutos(self):
+        _, d = doc("2026-11-11 16:30", "--simbolo", "tsla")
+        self.assertEqual(d["mercado"], "TSLA")
+        _, d = doc("2026-11-11 16:30", "--mercado", "TSLA", "--ib-minutos", "30")
+        self.assertEqual((d["ib_minutos"], d["ib_velas"], d["ibh"], d["ibl"]), (30, 6, 392.67, 386.35))
+        _, d = doc("2026-11-11 16:30")                                      # NQ sigue con su hora y su noche
+        self.assertEqual((d["ib_minutos"], d["ib_velas"], d["ibh"], d["onh"], d["instrumento"]), (60, 12, 28426.0, 28406.25, "futuro"))
+        with self.assertRaises(comun.KemetError):
+            run(["--mercado", "X1", "--ahora", "2026-11-11 16:30", "--offline", YAHOO])
+
+
 class Escribir(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -191,6 +250,18 @@ class Escribir(unittest.TestCase):
         _, d = doc("2026-11-11 16:30")
         self.assertEqual(d["mercado"], "ES")
         self.assertEqual(d["ibh"], 7624.75)
+
+    def test_un_ticker_en_config_escribe_niveles_json_sin_noche(self):
+        os.makedirs(comun.KEMET_DIR)
+        with open(os.path.join(comun.KEMET_DIR, "config.json"), "w", encoding="utf-8") as fh:
+            json.dump({"mercado": "TSLA", "tipo_cuenta": "propia"}, fh)
+        code, out, _ = run(["--ahora", "2026-11-11 16:30", "--offline", YAHOO, "--escribir"])
+        self.assertEqual(code, 0)
+        with open(os.path.join(comun.KEMET_DIR, "niveles.json"), encoding="utf-8") as fh:
+            d = json.load(fh)
+        self.assertEqual((d["mercado"], d["instrumento"], d["ibh"], d["ib_minutos"]), ("TSLA", "accion", 392.67, 15))
+        for k in ("onh", "onl"):
+            self.assertNotIn(k, d)
 
 
 if __name__ == "__main__":

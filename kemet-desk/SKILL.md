@@ -1,14 +1,15 @@
 ---
 name: kemet-desk
 description: >-
-  El desk de day trading de Kemet Capital para futuros en cuentas de fondeo (Topstep, Apex, Tradeify,
-  Alpha Futures, Lucid), dentro de Claude. Es la skill que enruta: sitúa al usuario (mercado, firma, cuenta,
-  stop, horario), elige la pieza del pack que toca (niveles, plan de sesión, entrada por ruptura del balance inicial, salida, máquina
-  del tiempo, tamaño por la firma, riesgo, alertas, diario, geometría) y la encadena en el orden correcto.
-  Úsala cuando el usuario opere o quiera operar ES, NQ, CL o GC intradía con una prop firm y diga «prepárame
-  la sesión», «qué niveles marco», «cuántos micros caben», «ha roto el balance inicial», «revísame el día», «qué
-  cuenta compro», «ponme las alertas», o cuando no sepa por dónde empezar. Da método, reglas y disciplina;
-  nunca dirección del mercado ni promesas.
+  El desk de day trading de Kemet Capital, dentro de Claude: acciones de EE. UU. y futuros, con tu propio
+  presupuesto o con una cuenta de fondeo (Topstep, Apex, Tradeify, Alpha Futures, Lucid). Es la skill que enruta:
+  sitúa al usuario (mercado, cuenta, stop, horario), elige la pieza del pack que toca (scanner, noticias, niveles,
+  plan de sesión, entrada por ruptura del rango, salida, máquina del tiempo, tamaño, riesgo, bróker en papel,
+  alertas, diario, resultados, Congreso, geometría) y la encadena en el orden correcto. Úsala cuando el usuario
+  opere o quiera operar intradía y diga «qué hay hoy», «escanea el mercado», «prepárame la sesión», «qué niveles
+  marco», «cuántas acciones o micros caben», «ha roto el rango», «mándala al bróker», «revísame el día», «qué
+  cuenta compro», «ponme las alertas», «qué dijo en resultados», o cuando no sepa por dónde empezar. Da método,
+  reglas y disciplina; nunca dirección del mercado ni promesas.
 argument-hint: "[qué quieres hacer hoy: plan | entrada | tamaño | riesgo | revisión]"
 ---
 
@@ -22,51 +23,65 @@ que hacen day trading pierde dinero, y una herramienta no cambia eso.
 
 `${CLAUDE_SKILL_DIR}` es la carpeta de esta skill. Las demás están al lado (`../kemet-niveles`, etc.).
 
-## Las once
+## Las dieciséis
 
 | skill | hace | cuándo |
 | --- | --- | --- |
 | `/kemet-desk` | esta: sitúa, elige y encadena | siempre la primera |
+| `/kemet-scanner` | barre miles de acciones (y los doce futuros): qué rompió, qué está sobre el máximo de ayer; escribe la watchlist | antes de abrir y a las 10:15 |
+| `/kemet-noticias` | titulares y 8-K por ticker con hora y etiqueta, y la agenda macro del día | antes de entrar en algo |
 | `/kemet-niveles` | máximo, mínimo y cierre de ayer, rango nocturno, apertura, balance inicial | antes de abrir y a las 10:30 |
 | `/kemet-plan` | el plan escrito: franjas, ventanas de datos, semáforo, niveles, tamaño, hora límite | antes de abrir |
-| `/kemet-entrada` | la ruptura del balance inicial vela a vela: formando, esperando, disparado, caducado | de 10:30 a 15:00 NY |
-| `/kemet-salida` | stop y objetivo antes de entrar, al tick, en puntos y dólares por micro | al disparo |
+| `/kemet-entrada` | la ruptura del rango vela a vela (60 min en futuros, 15 en acciones): formando, esperando, disparado, caducado; `watchlist` recorre la del scanner | de 09:45 a 15:00 NY |
+| `/kemet-salida` | stop y objetivo antes de entrar, al tick, en dólares por micro o por acción | al disparo |
 | `/kemet-maquina` | 10.000 repeticiones del resto de la sesión y la historia real de la regla | antes de poner nada |
-| `/kemet-tamano` | la configuración de la cuenta y cuántos micros caben con ese stop | una vez, y en cada orden |
-| `/kemet-riesgo` | PASS o BLOCK contra la firma y el límite del día; el registro de lo operado | antes de cada orden |
-| `/kemet-alertas` | stop, objetivo, plano a, hora límite de la firma, reloj de Globex | con la operación abierta |
+| `/kemet-tamano` | la cuenta (firma o propia) y cuántos micros o acciones caben con ese stop; la orden bracket | una vez, y en cada orden |
+| `/kemet-riesgo` | PASS o BLOCK contra tus reglas y el límite del día; el registro de lo operado | antes de cada orden |
+| `/kemet-broker` | el ticket en palabras llanas; con el sí del usuario, Claude lo manda a Alpaca en papel. Futuros, a mano | después del PASS |
+| `/kemet-alertas` | stop, objetivo, plano a, hora límite de la firma, apertura, relojes de Globex y NYSE | con la operación abierta |
 | `/kemet-diario` | la revisión del CSV de operaciones: cumplimiento antes que resultado | después de la sesión |
-| `/kemet-geometria` | qué cuenta comprar, cuánto arriesgar y cuándo retirar, con el estudio de 76 cuentas | antes de pagar una evaluación |
+| `/kemet-resultados` | los trimestres de la SEC: ingresos, beneficio, BPA, márgenes, cuándo toca el próximo | antes de operar una acción con resultados cerca |
+| `/kemet-congreso` | las declaraciones de operaciones de los congresistas, el día que salen | cuando toque; es un gancho, no una estrategia |
+| `/kemet-geometria` | qué cuenta de fondeo comprar, cuánto arriesgar y cuándo retirar, con el estudio de 76 cuentas | antes de pagar una evaluación |
 
 Todo cae en una carpeta `kemet/` del directorio de trabajo y cada pieza lee lo que escribió la anterior:
 
 ```
-niveles -> plan                                      (antes de abrir)
-entrada -> salida -> maquina -> tamano -> riesgo     (una operación)
-alertas                                              (mientras está abierta)
-riesgo registrar -> diario                           (después)
+scanner -> noticias -> niveles -> plan                          (antes de abrir)
+entrada -> salida -> maquina -> tamano -> riesgo -> broker      (una operación)
+alertas                                                         (mientras está abierta)
+riesgo registrar -> diario                                      (después)
+noticias / resultados / congreso                                (cuando toque)
 ```
 
 ## Cómo trabajas
 
-1. **Sitúa al usuario.** Mercado (ES, NQ, CL, GC), firma y cuenta, fase (evaluación o financiada), stop
-   habitual en puntos, desde dónde y a qué horas opera. Si `kemet/config.json` existe, ya lo sabes: léelo y
-   confírmalo en una línea. Si no, `kemet-tamano`: `tamano.py config --firma … --cuenta …` lo escribe desde
-   las reglas de la firma. Pregunta solo lo que cambia la respuesta.
+1. **Sitúa al usuario.** Qué opera (una acción por su ticker, o ES, NQ, CL, GC y el resto de futuros), con qué
+   cuenta (una firma de fondeo y su cuenta, o su propio presupuesto), fase (evaluación o financiada), stop
+   habitual en puntos o en dólares por acción, desde dónde y a qué horas opera. Si `kemet/config.json` existe, ya
+   lo sabes: léelo y confírmalo en una línea. Si no, `kemet-tamano`: `tamano.py config --firma … --cuenta …` lo
+   escribe desde las reglas de la firma, o `tamano.py config --propia --presupuesto … --max-perdida-operacion …
+   --max-perdida-dia …` con sus límites. Pregunta solo lo que cambia la respuesta.
 2. **Elige el modo** por lo que pida:
+   - «Qué hay hoy», «escanea el mercado», «qué está rompiendo»: `kemet-scanner` (antes de abrir, `diario`; a las
+     10:15, `orb`; en futuros, `futuros`), después `kemet-noticias` sobre lo que salga. Nunca eliges por el usuario.
+   - «Qué pasa con esta acción», «hay noticias»: `kemet-noticias`; si tiene resultados cerca, `kemet-resultados`.
    - «Prepárame la sesión», «qué niveles», «qué datos hay hoy»: `kemet-niveles`, luego `kemet-plan`. Si no
-     te ha dado la agenda del día, pídesela (hora y nombre de cada dato) o escribe la típica con `plan.py agenda`.
-   - «Ha roto el balance inicial», «avísame cuando dispare»: `kemet-entrada`.
+     te ha dado la agenda del día, `plan.py agenda --auto` la baja del calendario gratuito, o pídesela.
+   - «Ha roto el rango», «avísame cuando dispare», «mira la watchlist»: `kemet-entrada`.
    - «Dónde va el stop», «cuánto es 1R»: `kemet-salida`.
    - «Qué probabilidad tiene», «simúlalo», «es un coin flip»: `kemet-maquina`.
-   - «Cuántos micros», «me cabe», «con qué tamaño»: `kemet-tamano`, después `kemet-riesgo`.
+   - «Cuántos micros», «cuántas acciones», «me cabe», «con qué tamaño»: `kemet-tamano`, después `kemet-riesgo`.
+   - «Mándala», «ponla en el bróker», «ejecuta»: `kemet-broker`, solo tras el PASS de `kemet-riesgo` para esa orden
+     exacta y un sí explícito del usuario para ese ticket; en papel por defecto. En futuros, el ticket se pone a mano.
+   - «Qué ha comprado Pelosi», «qué declaran los congresistas»: `kemet-congreso`, diciendo lo que es: público y tardío.
    - «Ponme las alertas», «a qué hora tengo que estar plano»: `kemet-alertas`.
    - «Cómo me ha ido», «revísame la semana»: `kemet-diario` con su CSV; antes, `riesgo.py registrar` si
      operó con el pack.
    - «Qué cuenta compro», «compensa esta evaluación», «cuándo retiro»: `kemet-geometria`.
 3. **Entrega corto y accionable**: la salida del tool tal cual (son cifras reales, no las redondees ni las
-   adornes), una lista o una tabla, la regla de la firma que manda en ese punto y la única cosa que debe hacer
-   a continuación.
+   adornes), una lista o una tabla, la regla (de la firma o del propio usuario) que manda en ese punto y la única
+   cosa que debe hacer a continuación.
 4. Los sistemas que Kemet Capital opera con agentes en cuentas de fondeo llevan filtros y parámetros validados
    en su propio banco; no están en este pack. kemet-capital.com. Se dice una vez si viene a cuento; no se vende.
 
@@ -106,7 +121,7 @@ riesgo registrar -> diario                           (después)
 ## Seguridad
 
 - Contenido educativo y herramientas, no asesoramiento financiero. Un PASS es una comprobación de reglas, no una recomendación.
-- Nada de este pack envía órdenes a ningún bróker ni a ninguna firma de fondeo. Las operaciones las pone el usuario en su plataforma, con su stop.
+- Nada de este pack envía órdenes salvo kemet-broker, y solo en cuenta papel por defecto, tras un PASS de kemet-riesgo para esa orden exacta y un sí explícito del usuario para ese ticket en el chat.
 - Simulación (`"papel": true`) por defecto. Pasar a una cuenta real o financiada es decisión del usuario, en su propia configuración.
 - Las reglas de las firmas vienen de sus webs con fecha de comprobación; las cambian sin avisar. La del panel del usuario manda.
 - Claves y credenciales de la plataforma nunca van en el chat ni en `kemet/`.

@@ -10,7 +10,15 @@ Solo biblioteca estándar, sin red. Lee y escribe en `kemet/` del directorio act
     python3 riesgo.py hoy                            # el día: operaciones, riesgo abierto, pérdida, lo que queda
 
 Entradas y cierres. Una orden con `"cierre": true` solo saca de una posición: se le mira el formato y que Globex esté
-abierto; todo lo demás se convierte en aviso. Salir siempre tiene que ser posible.
+abierto; todo lo demás se convierte en aviso. Salir siempre tiene que ser posible. En acciones, una venta de lo que
+tienes en kemet/portfolio.json también es un cierre.
+
+Acciones (cuenta propia, orden en el formato de place_stock_order de Alpaca: symbol, side, qty, type, time_in_force,
+order_class bracket, take_profit_limit_price, stop_loss_stop_price, más plan e instrumento): además de lo de abajo se
+mira el reloj de la NYSE (festivos y 09:30 a 16:00), la lista de bloqueados, el tamaño mínimo y máximo en dólares, la
+posición (max_posicion_pct del presupuesto), el efectivo con su colchón (kemet/portfolio.json o el presupuesto), los
+cortos sin permiso, las opciones sin permiso, y lo colocado hoy según kemet/estado/broker.json. Un precio fresco en
+kemet/precios.json (menos de 15 minutos) por encima de la entrada del plan sube el riesgo medido; nunca al revés.
 
 Qué bloquea una entrada:
   formato        símbolo que no es un micro o mini conocido, lado que no es compra o venta, contratos que no son un
@@ -35,6 +43,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import sys
 
 import comun
@@ -45,10 +54,28 @@ DEFECTO = {"mercado": "NQ", "cuenta_nombre": "sin cuenta configurada", "perdida_
            "max_micro": None, "max_mini": None, "hora_limite": None, "hora_limite_tz": "America/New_York",
            "sin_entradas_antes": "09:45", "sin_entradas_despues": "15:00", "plano_a": None, "consistencia": None, "papel": True}
 CAMPOS_HUELLA = ("simbolo", "lado", "contratos", "tipo", "precio", "stop", "objetivo", "cierre")
+# Los parámetros de place_stock_order de Alpaca: la huella de una orden de acción son estos más `cierre`, exactamente como en
+# kemet-broker/broker.py (si no coinciden, el ticket nunca sale LISTO).
+CAMPOS_ALPACA = ("symbol", "side", "qty", "notional", "type", "time_in_force", "limit_price", "stop_price", "trail_price",
+                 "trail_percent", "extended_hours", "client_order_id", "order_class", "take_profit_limit_price",
+                 "stop_loss_stop_price", "stop_loss_limit_price", "advanced_instructions")
+CAMPOS_HUELLA_ACCION = CAMPOS_ALPACA + ("cierre",)
+# La cuenta propia sin config: los topes del pack de referencia.
+DEFECTO_PROPIA = {"mercado": "TSLA", "cuenta_nombre": "sin cuenta configurada", "presupuesto": None, "efectivo_pct": 10, "max_posicion_pct": 75,
+                  "max_orden_usd": 4000, "min_orden_usd": 5, "perdida_max_dia": 150, "riesgo_por_operacion": 50, "fallos_y_paras": FALLOS_Y_PARAS,
+                  "permitir_cortos": False, "permitir_margen": False, "permitir_opciones": False, "bloqueados": [], "hora_limite": None,
+                  "sin_entradas_antes": "09:45", "sin_entradas_despues": "15:00", "plano_a": "15:55", "consistencia": None, "papel": True}
+LADO_ALPACA = {"buy": "compra", "sell": "venta", "compra": "compra", "venta": "venta"}
+LADO_ALPACA_INV = {"compra": "buy", "venta": "sell"}
+TIPO_ALPACA = {"market": "market", "mercado": "market", "limit": "limit", "limite": "limit"}
+OCC = re.compile(r"^[A-Z]{1,6}\d{6}[CP]\d{8}$")            # un contrato de opciones (símbolo OCC)
+PRECIO_FRESCO_MIN = 15
+COLOCADAS = ("colocada", "llenada", "placed", "filled")  # estados de kemet/estado/broker.json que cuentan como puestas
 APERTURA_MIN = 15
 LADOS = ("compra", "venta")
 DIA = os.path.join("estado", "dia.json")
 RIESGO = os.path.join("estado", "riesgo.json")
+BROKER = os.path.join("estado", "broker.json")
 
 
 # ---------------------------------------------------------------- utilidades
@@ -60,9 +87,22 @@ def _f(x):
         return None
 
 
+def es_orden_accion(orden):
+    """Una orden de acción lleva "instrumento": "accion" o el formato de Alpaca (symbol, side); una de futuro, simbolo y contratos.
+    La misma regla que kemet-broker/broker.py (es_accion)."""
+    if not isinstance(orden, dict):
+        return False
+    inst = str(orden.get("instrumento") or "").lower()
+    if inst in ("accion", "acción", "futuro"):
+        return inst != "futuro"
+    return "symbol" in orden and "simbolo" not in orden
+
+
 def huella(orden):
-    """sha1 de los campos de la orden (los que importan para ponerla): la misma orden da la misma huella."""
-    core = {k: orden[k] for k in CAMPOS_HUELLA if k in orden and orden[k] is not None}
+    """sha1 de 12 hex de los campos de la orden que importan para ponerla: la misma orden da la misma huella. Para un futuro,
+    CAMPOS_HUELLA; para una acción, los campos de place_stock_order más `cierre`. Idéntica a la de kemet-broker/broker.py."""
+    campos = CAMPOS_HUELLA_ACCION if es_orden_accion(orden) else CAMPOS_HUELLA
+    core = {k: orden[k] for k in campos if k in orden and orden[k] is not None}
     blob = json.dumps(core, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
 
@@ -135,9 +175,333 @@ def recalcular(dia):
 
 # ---------------------------------------------------------------- la comprobación
 
-def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None):
-    """Pura. Devuelve {"fecha", "ahora_ny", "papel", "resultados": [...], "pass", "block", "avisos", "hoy"}."""
-    c = dict(DEFECTO)
+def colocadas_hoy(broker, fecha):
+    """Lo que kemet-broker apuntó como colocado (o llenado) hoy en kemet/estado/broker.json: el último estado de cada huella;
+    las aprobadas sin colocar, las denegadas y las fallidas no cuentan."""
+    if not isinstance(broker, dict) or str(broker.get("fecha")) != fecha:
+        return []
+    ultimo = {}
+    for k, o in enumerate(broker.get("ordenes") or []):
+        if isinstance(o, dict) and str(o.get("fecha") or fecha) == fecha:
+            ultimo[o.get("huella") or ("#%d" % k)] = o
+    return [o for o in ultimo.values() if str(o.get("estado") or "").lower() in COLOCADAS]
+
+
+def cuenta_propia(cartera, c, precios):
+    """El estado de la cuenta propia: efectivo, acciones por símbolo y su valor. Sin kemet/portfolio.json, el presupuesto en efectivo."""
+    presupuesto = _f(c.get("presupuesto"))
+    if not isinstance(cartera, dict):
+        return {"efectivo": presupuesto, "acciones": {}, "valores": {}, "origen": "presupuesto"}
+    efectivo = _f(cartera.get("efectivo"))
+    acciones, valores = {}, {}
+    for p in cartera.get("posiciones") or []:
+        if not isinstance(p, dict):
+            continue
+        s = str(p.get("simbolo") or p.get("symbol") or "").upper()
+        n = _f(p.get("cantidad", p.get("qty"))) or 0.0
+        if not s or not n:
+            continue
+        acciones[s] = acciones.get(s, 0.0) + n
+        precio = (precios or {}).get(s) or _f(p.get("precio_medio")) or 0.0
+        valores[s] = valores.get(s, 0.0) + n * precio
+    return {"efectivo": efectivo if efectivo is not None else presupuesto, "acciones": acciones, "valores": valores, "origen": "kemet/portfolio.json"}
+
+
+def precios_de(doc, ahora_utc):
+    """{SIMBOLO: (precio, fresco)} de kemet/precios.json; fresco = leído hace menos de PRECIO_FRESCO_MIN minutos."""
+    out = {}
+    if not isinstance(doc, dict):
+        return out
+    for s, q in (doc.get("precios") or {}).items():
+        precio = _f(q.get("precio")) if isinstance(q, dict) else _f(q)
+        if not precio or precio <= 0:
+            continue
+        cuando = None
+        for texto in ((q.get("leido"), q.get("generado")) if isinstance(q, dict) else ()) + (doc.get("generado"),):
+            if texto:
+                try:
+                    cuando = dt.datetime.strptime(str(texto), "%Y-%m-%dT%H:%M:%SZ")
+                    break
+                except ValueError:
+                    continue
+        fresco = cuando is not None and -60 <= (ahora_utc - cuando).total_seconds() <= PRECIO_FRESCO_MIN * 60
+        out[str(s).upper()] = (precio, fresco)
+    return out
+
+
+def _entero(x):
+    """"9" -> 9, 9.0 -> 9; None si no es un entero mayor que 0."""
+    if isinstance(x, bool):
+        return None
+    if isinstance(x, int):
+        return x if x > 0 else None
+    v = _f(x)
+    if v is None or v <= 0 or abs(v - round(v)) > 1e-9:
+        return None
+    return int(round(v))
+
+
+def _ventanas_y_horario(ctx, t, rth_inicio, plano_cfg, con_hora_limite):
+    """Las comprobaciones de ventanas y horario de una entrada (comunes a futuros y acciones). Devuelve la lista de motivos."""
+    c = ctx["c"]
+    luego = []
+    apertura = comun.parse_hhmm(rth_inicio)
+    if apertura <= t < mas_min(apertura, APERTURA_MIN):
+        luego.append("ventana: apertura %s–%s NY, los quince minutos más bruscos del día (son las %s)"
+                     % (comun.hhmm(apertura), comun.hhmm(mas_min(apertura, APERTURA_MIN)), comun.hhmm(t)))
+    for desde, hasta, motivo in ctx["ventanas"]:
+        if desde <= t <= hasta:
+            luego.append("ventana: %s, de %s a %s NY no se abre ni se mantiene (son las %s)" % (motivo, comun.hhmm(desde), comun.hhmm(hasta), comun.hhmm(t)))
+    antes = comun.parse_hhmm(c["sin_entradas_antes"]) if c.get("sin_entradas_antes") else None
+    despues = comun.parse_hhmm(c["sin_entradas_despues"]) if c.get("sin_entradas_despues") else None
+    if antes and t < antes:
+        luego.append("horario: sin entradas antes de las %s NY (son las %s)" % (comun.hhmm(antes), comun.hhmm(t)))
+    if despues and t > despues:
+        luego.append("horario: sin entradas después de las %s NY (son las %s)" % (comun.hhmm(despues), comun.hhmm(t)))
+    if t >= comun.parse_hhmm(plano_cfg):
+        luego.append("horario: a las %s NY se está plano, no se abre nada (son las %s)" % (plano_cfg, comun.hhmm(t)))
+    if con_hora_limite and ctx["hora_limite_ny"] and t >= ctx["hora_limite_ny"]:
+        luego.append("horario: la hora límite de tu firma es %s %s (%s NY) y son las %s" % (c["hora_limite"], c.get("hora_limite_tz"), comun.hhmm(ctx["hora_limite_ny"]), comun.hhmm(t)))
+    return luego
+
+
+def _plano_de(o, c, por_defecto):
+    plano = o.get("plan", {}).get("plano_a") if isinstance(o.get("plan"), dict) else None
+    plano = plano or c.get("plano_a") or por_defecto
+    if c.get("plano_a") and comun.parse_hhmm(c["plano_a"]) < comun.parse_hhmm(plano):
+        plano = c["plano_a"]
+    return plano
+
+
+def _comprobar_futuro(o, ctx):
+    """Una orden de futuros (simbolo MNQ, lado compra/venta, contratos…): la comprobación de siempre."""
+    c, cfg, t = ctx["c"], ctx["cfg"], ctx["t"]
+    motivos, avisos, info, luego = [], [], [], []
+    cierre = bool(o.get("cierre"))
+    sim = str(o.get("simbolo") or "").strip().upper()
+    lado = str(o.get("lado") or "").strip().lower()
+    n = o.get("contratos")
+    precio, stop, objetivo = _f(o.get("precio")), _f(o.get("stop")), _f(o.get("objetivo"))
+    ct = contrato_de(sim)
+    if not ct:
+        motivos.append("formato: %r no es un micro ni un mini que conozca (%s); una acción va en el formato de acciones (symbol, side, qty) o con \"instrumento\": \"accion\""
+                       % (o.get("simbolo"), ", ".join(sorted(comun.MICRO_A_CODIGO))))
+    if lado not in LADOS:
+        motivos.append("formato: el lado tiene que ser compra o venta, no %r" % o.get("lado"))
+    if not isinstance(n, int) or isinstance(n, bool) or n <= 0:
+        motivos.append("formato: contratos tiene que ser un entero mayor que 0, no %r" % (n,))
+        n = 0
+    if precio is None or precio <= 0:
+        motivos.append("formato: precio tiene que ser un número mayor que 0, no %r" % o.get("precio"))
+    globex, motivo_globex = ctx["globex"]
+    if globex != "abierto":
+        motivos.append("globex: %s (%s), %s NY" % (globex, motivo_globex, comun.hhmm(t)))
+    mercado, es_micro, punto = ct if ct else (None, True, 0.0)
+    if ct and mercado != ctx["mercado_cfg"] and cfg:
+        avisos.append("la orden es de %s y la config de %s: compruebo con las reglas de la cuenta y las ventanas de %s" % (mercado, ctx["mercado_cfg"], mercado))
+    ctx["ventanas"] = ventanas_del_dia(ctx["agenda"], ctx["fecha"], mercado) if ct else []
+    perdida = None
+    riesgo_pts = None
+    if ct and lado in LADOS and precio and cierre:
+        info.append("cierre: solo se mira el formato y que Globex esté abierto")
+    if ct and lado in LADOS and precio and not cierre:
+        largo = lado == "compra"
+        if stop is None:
+            luego.append("stop: sin stop. Toda entrada lleva su stop puesto en la plataforma antes de confirmarla")
+        elif (largo and stop >= precio) or (not largo and stop <= precio):
+            luego.append("stop: el stop %s tiene que estar %s de la entrada %s en una %s" % (pts(stop), "debajo" if largo else "encima", pts(precio), lado))
+        else:
+            riesgo_pts = comun.al_tick(abs(precio - stop), comun.CONTRATOS[mercado]["tick"])
+            perdida = round(n * riesgo_pts * punto, 2)
+            if objetivo is not None and ((largo and objetivo <= precio) or (not largo and objetivo >= precio)):
+                luego.append("objetivo: el objetivo %s tiene que estar %s de la entrada %s" % (pts(objetivo), "encima" if largo else "debajo", pts(precio)))
+            if ctx["por_op"] and perdida > ctx["por_op"] + 0.005:
+                luego.append("pérdida: %d × %s pts × %s $/pt = %s al stop, más que tu riesgo por operación de %s"
+                             % (n, pts(riesgo_pts), num(punto, 0), usd(perdida, 2), usd(ctx["por_op"], 2)))
+            if ctx["pmd"]:
+                usado = ctx["abierto"] + ctx["realizada"] + ctx["lote_riesgo"]
+                if usado + perdida > ctx["pmd"] + 0.005:
+                    luego.append("día: %s abierto y perdido hoy más %s de esta = %s, más que tu pérdida máxima del día de %s"
+                                 % (usd(usado, 2), usd(perdida, 2), usd(usado + perdida, 2), usd(ctx["pmd"])))
+            info.append("entrada %s, stop %s, objetivo %s: riesgo %s pts = %s por %s" % (
+                pts(precio), pts(stop), pts(objetivo) if objetivo is not None else "ninguno", pts(riesgo_pts), usd(riesgo_pts * punto, 2), sim))
+            info.append("pérdida al stop %s%s" % (usd(perdida, 2), (" (riesgo por operación %s)" % usd(ctx["por_op"], 2)) if ctx["por_op"] else ""))
+        fyp = ctx["fyp"]
+        if fyp and ctx["entradas_hoy"] + ctx["lote_entradas"] >= fyp:
+            luego.append("operaciones: hoy ya hay %d%s y tu regla son %d al día (tres fallos y paras)"
+                         % (ctx["entradas_hoy"], (" más %d de este archivo" % ctx["lote_entradas"]) if ctx["lote_entradas"] else "", fyp))
+        tope = c.get("max_micro") if es_micro else c.get("max_mini")
+        if tope and n > int(tope):
+            luego.append("contratos: %d %s, más que el tope de %d %s de tu cuenta" % (n, sim, int(tope), "micros" if es_micro else "minis"))
+        elif not tope and cfg:
+            avisos.append("tu cuenta no publica tope de %s: mira el de tu panel" % ("micros" if es_micro else "minis"))
+        luego.extend(_ventanas_y_horario(ctx, t, comun.CONTRATOS[mercado]["rth"][0], _plano_de(o, c, comun.CONTRATOS[mercado]["plano"]), True))
+        if ctx["pmd"] or fyp:
+            info.append("hoy antes de esta: %d de %d operaciones, %s abierto, %s perdido, %s de %s del día"
+                        % (ctx["entradas_hoy"] + ctx["lote_entradas"], fyp, usd(ctx["abierto"]), usd(ctx["realizada"]), usd(ctx["abierto"] + ctx["realizada"] + ctx["lote_riesgo"]), usd(ctx["pmd"])))
+    return {"sim": sim, "lado": lado, "n": o.get("contratos"), "precio": precio, "stop": stop, "objetivo": objetivo, "riesgo_pts": riesgo_pts,
+            "perdida": perdida, "cierre": cierre, "instrumento": "futuro", "motivos": motivos, "avisos": avisos, "info": info, "luego": luego, "tipo": o.get("tipo")}
+
+
+def _comprobar_accion(o, ctx):
+    """Una orden de una acción en el formato de place_stock_order de Alpaca (o con instrumento: accion), contra la cuenta propia."""
+    c, cfg, t = ctx["c"], ctx["cfg"], ctx["t"]
+    motivos, avisos, info, luego = [], [], [], []
+    sim = str(o.get("symbol") or o.get("simbolo") or "").strip().upper().replace(" ", "")
+    lado = LADO_ALPACA.get(str(o.get("side") or o.get("lado") or "").strip().lower())
+    tipo = TIPO_ALPACA.get(str(o.get("type") or o.get("tipo") or "market").strip().lower())
+    tif = str(o.get("time_in_force") or "day").strip().lower()
+    n = _entero(o.get("qty", o.get("contratos", o.get("cantidad"))))
+    plan = o.get("plan") if isinstance(o.get("plan"), dict) else {}
+    clase = str(o.get("order_class") or "").strip().lower()
+    patas = o.get("take_profit_limit_price") is not None or o.get("stop_loss_stop_price") is not None
+    bracket = clase == "bracket" or (not clase and patas)
+    cierre_declarado = bool(o.get("cierre"))
+    es_opcion = bool(OCC.match(sim))
+    # formato
+    if not sim:
+        motivos.append("formato: sin símbolo")
+    elif not es_opcion and not comun._TICKER.match(sim):
+        motivos.append("formato: %r no parece un ticker de EE. UU. (TSLA, BRK.B); este pack opera acciones, ETF y futuros" % sim)
+    if lado is None:
+        motivos.append("formato: side tiene que ser buy o sell, no %r" % (o.get("side") if "side" in o else o.get("lado")))
+    if n is None:
+        motivos.append("formato: qty tiene que ser un entero mayor que 0 (acciones enteras), no %r" % (o.get("qty", o.get("contratos")),))
+    if tipo is None:
+        motivos.append("formato: type tiene que ser market o limit, no %r" % o.get("type"))
+    if tipo == "limit" and not _f(o.get("limit_price")):
+        motivos.append("formato: una orden limit necesita limit_price")
+    if tif not in ("day", "gtc"):
+        motivos.append("formato: time_in_force tiene que ser day o gtc, no %r" % tif)
+    if bracket and not cierre_declarado and (o.get("take_profit_limit_price") is None or o.get("stop_loss_stop_price") is None):
+        motivos.append("formato: una orden bracket lleva take_profit_limit_price y stop_loss_stop_price")
+    for k in ("qty", "limit_price", "take_profit_limit_price", "stop_loss_stop_price"):
+        if o.get(k) is not None:
+            v = _f(o.get(k))
+            if v is None or v <= 0:
+                motivos.append("formato: %s tiene que ser un número mayor que 0, no %r" % (k, o.get(k)))
+            elif not isinstance(o.get(k), str):
+                avisos.append("%s va como texto (\"%s\"), como lo escribe place_stock_order" % (k, o.get(k)))
+    # el reloj de la NYSE y la cuenta
+    nyse, motivo_nyse = ctx["nyse"]
+    if nyse != "abierto":
+        motivos.append("mercado: NYSE %s (%s), %s NY" % (nyse, motivo_nyse, comun.hhmm(t)))
+    if es_opcion:
+        if not c.get("permitir_opciones"):
+            motivos.append("opciones: %s es un contrato de opciones y tu cuenta no las permite (permitir_opciones: false)" % sim)
+        else:
+            avisos.append("orden de opciones: se puede perder todo lo pagado")
+    if cfg and not ctx["propia"]:
+        luego.append("cuenta: tu config es de una cuenta de firma (futuros); para acciones configura una cuenta propia con tamano.py config --propia")
+    ctx["ventanas"] = ventanas_del_dia(ctx["agenda"], ctx["fecha"], sim)
+    # el precio de referencia: lo que cuesta entrar
+    cuenta = ctx["cuenta"]
+    precios = ctx["precios"]
+    largo = lado == "compra"
+    entrada_plan = _f(plan.get("entrada") if plan.get("entrada") is not None else plan.get("entry"))
+    fresco = precios.get(sim, (None, False))
+    ref, origen = None, None
+    if tipo == "limit":
+        ref, origen = _f(o.get("limit_price")), "precio límite"
+    if ref is None:
+        candidatos = [(p, w) for p, w in ((entrada_plan, "entrada del plan"), (fresco[0] if fresco[1] else None, "último precio")) if p]
+        if candidatos:
+            ref, origen = (max if largo or lado is None else min)(candidatos, key=lambda x: x[0])
+            if origen == "último precio" and entrada_plan and abs(ref - entrada_plan) > 0.005:
+                info.append("último precio de %s %s, %s de la entrada del plan %s: el riesgo se mide desde %s"
+                            % (sim, usd(ref, 2), "por encima" if largo else "por debajo", usd(entrada_plan, 2), usd(ref, 2)))
+        elif fresco[0]:
+            ref, origen = fresco[0], "precio viejo"
+            avisos.append("el precio de %s en kemet/precios.json tiene más de %d minutos: se usa, pero pide uno nuevo (alertas.py quote %s --escribir)" % (sim, PRECIO_FRESCO_MIN, sim))
+    valor = round(n * ref, 2) if n and ref else None
+    # entrada o cierre
+    tiene = cuenta["acciones"].get(sim, 0.0)
+    cierre = cierre_declarado or (lado == "venta" and n is not None and 0 < n <= tiene + 1e-9) or (lado == "compra" and tiene < 0 and n is not None and n <= -tiene + 1e-9)
+    if cierre:
+        info.append("cierre: solo se mira el formato, la NYSE abierta y que no sea un corto%s" % (" (venta de %s acciones que tienes en kemet/portfolio.json)" % num(tiene, 0) if not cierre_declarado else ""))
+        if cierre_declarado and lado == "venta" and n and n > tiene + 1e-9:
+            avisos.append("vendes %d %s y en kemet/portfolio.json hay %s: si no las tienes, es un corto" % (n, sim, num(tiene, 0)))
+    if not cierre and n and ref is None:
+        luego.append("precio: sin precio de %s para medir %d acciones: pon la entrada en plan o guarda kemet/precios.json (alertas.py quote %s --escribir)" % (sim, n, sim))
+    # lista de bloqueados y tamaño
+    if sim in ctx["bloqueados"]:
+        luego.append("bloqueado: %s está en tu lista de bloqueados (config: bloqueados)" % sim)
+    if valor is not None:
+        if c.get("min_orden_usd") and valor < float(c["min_orden_usd"]) - 0.005:
+            luego.append("tamaño: %s, menos que tu orden mínima de %s" % (usd(valor, 2), usd(float(c["min_orden_usd"]))))
+        if c.get("max_orden_usd") and valor > float(c["max_orden_usd"]) + 0.005:
+            luego.append("tamaño: %s, más que tu orden máxima de %s" % (usd(valor, 2), usd(float(c["max_orden_usd"]))))
+    # efectivo y posición, simulados en orden
+    presupuesto = _f(c.get("presupuesto"))
+    efectivo = cuenta["efectivo"]
+    if valor is not None and lado == "compra" and not cierre:
+        if efectivo is None:
+            avisos.append("sin presupuesto en la config ni kemet/portfolio.json: no mido el efectivo ni la posición")
+        else:
+            colchon = round((presupuesto or efectivo) * float(c.get("efectivo_pct") or 0) / 100.0, 2)
+            despues = efectivo - valor
+            if despues < -0.005 and not c.get("permitir_margen"):
+                luego.append("efectivo: hacen falta %s y hay %s de efectivo; eso sería margen (dinero prestado) y no lo permites" % (usd(valor, 2), usd(efectivo, 2)))
+            elif despues < colchon - 0.005:
+                luego.append("efectivo: dejaría %s de efectivo, por debajo de tu colchón del %s %% (%s)" % (usd(max(despues, 0), 2), num(float(c.get("efectivo_pct") or 0), 0), usd(colchon)))
+            base = presupuesto or (efectivo + sum(cuenta["valores"].values()))
+            tope = base * float(c.get("max_posicion_pct") or 100) / 100.0
+            pos = cuenta["valores"].get(sim, 0.0) + valor
+            if base > 0 and pos > tope + 0.005:
+                luego.append("posición: %s sería %s, el %s %% de %s, más que tu tope del %s %% (%s)"
+                             % (sim, usd(pos, 2), num(100.0 * pos / base, 1), usd(base), num(float(c.get("max_posicion_pct") or 100), 0), usd(tope)))
+    # cortos
+    if lado == "venta" and sim and n and not cierre and not c.get("permitir_cortos"):
+        luego.append("corto: vendes %d %s y tienes %s; vender en corto no está permitido (permitir_cortos: false). Si las compraste, apunta el fill primero (broker.py registrar)" % (n, sim, num(tiene, 0)))
+    # stop, pérdida, día, operaciones, ventanas y horario
+    perdida = riesgo = stop = objetivo = None
+    if not cierre and lado:
+        stop_pata, stop_plan = _f(o.get("stop_loss_stop_price")), _f(plan.get("stop"))
+        stop = stop_pata or stop_plan
+        objetivo = _f(o.get("take_profit_limit_price")) or _f(plan.get("objetivo") if plan.get("objetivo") is not None else plan.get("target"))
+        if stop_pata and stop_plan and abs(stop_pata - stop_plan) > 0.005:
+            avisos.append("el stop del bracket %s no es el del plan %s: el bróker usa el del bracket" % (usd(stop_pata, 2), usd(stop_plan, 2)))
+        if stop and not stop_pata:
+            avisos.append("el stop %s está en el plan, no en el bróker: ponlo en la orden (bracket) o una alerta (alertas.py add --desde-plan)" % usd(stop, 2))
+        if not stop:
+            luego.append("stop: sin stop. Toda entrada lleva su stop: el stop_loss_stop_price del bracket, de kemet-salida y kemet-tamano")
+        elif ref:
+            if (largo and stop >= ref - 0.005) or (not largo and stop <= ref + 0.005):
+                luego.append("stop: el stop %s tiene que estar %s de la entrada %s en una %s" % (usd(stop, 2), "debajo" if largo else "encima", usd(ref, 2), lado))
+            else:
+                riesgo = round(abs(ref - stop), 2)
+                perdida = round((n or 0) * riesgo, 2)
+                if objetivo is not None and ((largo and objetivo <= ref + 0.005) or (not largo and objetivo >= ref - 0.005)):
+                    luego.append("objetivo: el objetivo %s tiene que estar %s de la entrada %s" % (usd(objetivo, 2), "encima" if largo else "debajo", usd(ref, 2)))
+                if ctx["por_op"] and perdida > ctx["por_op"] + 0.005:
+                    luego.append("pérdida: %d × %s por acción = %s al stop, más que tu riesgo por operación de %s" % (n or 0, usd(riesgo, 2), usd(perdida, 2), usd(ctx["por_op"], 2)))
+                if ctx["pmd"]:
+                    usado = ctx["abierto"] + ctx["realizada"] + ctx["lote_riesgo"]
+                    if usado + perdida > ctx["pmd"] + 0.005:
+                        luego.append("día: %s abierto y perdido hoy más %s de esta = %s, más que tu pérdida máxima del día de %s"
+                                     % (usd(usado, 2), usd(perdida, 2), usd(usado + perdida, 2), usd(ctx["pmd"])))
+                info.append("entrada %s (%s), stop %s, objetivo %s: riesgo %s por acción" % (usd(ref, 2), origen, usd(stop, 2), usd(objetivo, 2) if objetivo else "ninguno", usd(riesgo, 2)))
+                info.append("pérdida al stop %s%s · %d acciones = %s" % (usd(perdida, 2), (" (riesgo por operación %s)" % usd(ctx["por_op"], 2)) if ctx["por_op"] else "", n or 0, usd(valor or 0, 2)))
+        fyp = ctx["fyp"]
+        if fyp and ctx["entradas_hoy"] + ctx["lote_entradas"] >= fyp:
+            luego.append("operaciones: hoy ya hay %d%s y tu regla son %d al día (tres fallos y paras)"
+                         % (ctx["entradas_hoy"], (" más %d de este archivo" % ctx["lote_entradas"]) if ctx["lote_entradas"] else "", fyp))
+        luego.extend(_ventanas_y_horario(ctx, t, "09:30", _plano_de(o, c, "15:55"), False))
+        if ctx["pmd"] or fyp:
+            info.append("hoy antes de esta: %d de %d operaciones, %s abierto, %s perdido, %s de %s del día"
+                        % (ctx["entradas_hoy"] + ctx["lote_entradas"], fyp, usd(ctx["abierto"]), usd(ctx["realizada"]), usd(ctx["abierto"] + ctx["realizada"] + ctx["lote_riesgo"]), usd(ctx["pmd"])))
+    return {"sim": sim, "lado": lado or str(o.get("side") or ""), "n": n if n is not None else o.get("qty"), "precio": ref, "stop": stop, "objetivo": objetivo, "riesgo_pts": riesgo,
+            "perdida": perdida, "cierre": cierre, "instrumento": "accion", "motivos": motivos, "avisos": avisos, "info": info, "luego": luego,
+            "tipo": tipo or o.get("type"), "valor": valor, "lado_alpaca": LADO_ALPACA_INV.get(lado), "ref_origen": origen,
+            "efecto": (sim, lado, n or 0, valor or 0.0) if lado and n else None}
+
+
+def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None, broker=None, cartera=None, precios=None):
+    """Pura. Devuelve {"fecha", "ahora_ny", "papel", "resultados": [...], "pass", "block", "avisos", "hoy"}.
+    `broker` es kemet/estado/broker.json (lo colocado hoy), `cartera` kemet/portfolio.json y `precios` kemet/precios.json."""
+    hay_acciones = any(es_orden_accion(o) for o in ordenes)
+    propia = bool(cfg) and (cfg.get("tipo_cuenta") == "propia" or cfg.get("cuenta") == "propia")
+    c = dict(DEFECTO_PROPIA if (hay_acciones and not cfg) else DEFECTO)
     c.update(cfg or {})
     ahora_utc = ahora_utc or comun.utc_ahora()
     ny = comun.a_ny(ahora_utc)
@@ -148,137 +512,98 @@ def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None):
     neto = sum(_f(o.get("resultado_usd")) or 0.0 for o in ops_hoy if o.get("cerrada"))
     realizada = max(0.0, -neto)
     huellas_hoy = {o.get("huella") for o in ops_hoy if o.get("huella")}
+    entradas_hoy = len(ops_hoy)
+    colocadas = colocadas_hoy(broker, fecha)
+    claves_colocadas = set()
+    avisos_top = []
+    for o in colocadas:
+        s = str(o.get("simbolo") or o.get("symbol") or "").upper()
+        l = str(o.get("lado") or o.get("side") or "").lower()
+        claves_colocadas.add((s, LADO_ALPACA.get(l, l)))
+        if o.get("huella") in huellas_hoy:
+            continue
+        if o.get("huella"):
+            huellas_hoy.add(o["huella"])
+        if o.get("clase") == "cierre" or o.get("cierre") or LADO_ALPACA.get(l, l) == "venta":
+            continue
+        entradas_hoy += 1
+        r = _f(o.get("perdida_al_stop")) or _f(o.get("riesgo_usd")) or _f(o.get("perdida_max_usd"))
+        if r is None:
+            avisos_top.append("una orden colocada hoy (%s %s, kemet/estado/broker.json) no trae su pérdida al stop: cuenta como operación, no en el día; apúntala con registrar --abrir" % (l or "?", s or "?"))
+        else:
+            abierto += r
     pmd = _f(c.get("perdida_max_dia")) or 0.0
     fyp = int(c.get("fallos_y_paras") or FALLOS_Y_PARAS)
-    por_op = pmd / fyp if pmd else None
-    avisos_top = []
+    por_op = _f(c.get("riesgo_por_operacion")) if propia and c.get("riesgo_por_operacion") else (pmd / fyp if pmd else None)
     if not cfg:
-        avisos_top.append("sin kemet/config.json: compruebo con los valores por defecto (pérdida máxima del día %s, tres fallos y paras); ejecuta tamano.py config" % usd(pmd))
+        if hay_acciones:
+            avisos_top.append("sin kemet/config.json: compruebo con los valores por defecto de una cuenta propia (pérdida máxima del día %s, %s por operación, tres fallos y paras); ejecuta tamano.py config --propia" % (usd(pmd), usd(por_op or 0)))
+        else:
+            avisos_top.append("sin kemet/config.json: compruebo con los valores por defecto (pérdida máxima del día %s, tres fallos y paras); ejecuta tamano.py config" % usd(pmd))
     if not c.get("papel", True):
         avisos_top.append("cuenta REAL (papel: false): estas órdenes van con dinero de verdad")
     if c.get("consistencia"):
         avisos_top.append("consistencia de la firma: %s. No se puede medir aquí: mírala en tu panel antes de pedir un cobro" % c["consistencia"])
-    globex, motivo_globex = comun.estado_globex(ahora_utc)
     hora_limite_ny = None
     if c.get("hora_limite"):
         hora_limite_ny = hora_a_ny(c["hora_limite"], c.get("hora_limite_tz"))
         if c.get("hora_limite_tz") == "America/Chicago":
             avisos_top.append("hora límite de la firma %s Chicago = %s NY" % (c["hora_limite"], comun.hhmm(hora_limite_ny)))
-    mercado_cfg = (c.get("mercado") or "NQ").upper()
     if agenda and str(agenda.get("fecha")) != fecha:
         avisos_top.append("kemet/agenda.json es del %s, no de hoy: no conozco los datos de hoy" % agenda.get("fecha"))
     elif not agenda:
         avisos_top.append("sin kemet/agenda.json: no conozco los datos de hoy, solo la ventana de la apertura")
+    ctx = {"c": c, "cfg": cfg, "fecha": fecha, "t": t, "agenda": agenda, "ventanas": [], "globex": comun.estado_globex(ahora_utc), "nyse": comun.estado_nyse(ahora_utc),
+           "hora_limite_ny": hora_limite_ny, "mercado_cfg": (c.get("mercado") or "NQ").upper(), "pmd": pmd, "fyp": fyp, "por_op": por_op,
+           "abierto": abierto, "realizada": realizada, "entradas_hoy": entradas_hoy, "lote_entradas": 0, "lote_riesgo": 0.0, "propia": propia,
+           "bloqueados": {str(b).upper() for b in c.get("bloqueados") or []}, "precios": {}, "cuenta": None}
+    if hay_acciones:
+        ctx["precios"] = precios_de(precios, ahora_utc)
+        ctx["cuenta"] = cuenta_propia(cartera, c, {s: p for s, (p, fresco) in ctx["precios"].items() if fresco})
+        if cartera is None and not c.get("presupuesto"):
+            avisos_top.append("sin kemet/portfolio.json ni presupuesto: no mido el efectivo ni el tope de posición")
 
     resultados, vistas = [], set()
-    lote_entradas, lote_riesgo = 0, 0.0
     for i, o in enumerate(ordenes, 1):
-        motivos, avisos, info, luego = [], [], [], []
-        cierre = bool(o.get("cierre"))
-        sim = str(o.get("simbolo") or "").strip().upper()
-        lado = str(o.get("lado") or "").strip().lower()
-        n = o.get("contratos")
-        precio, stop, objetivo = _f(o.get("precio")), _f(o.get("stop")), _f(o.get("objetivo"))
-        ct = contrato_de(sim)
-        if not ct:
-            motivos.append("formato: %r no es un micro ni un mini que conozca (%s)" % (o.get("simbolo"), ", ".join(sorted(comun.MICRO_A_CODIGO))))
-        if lado not in LADOS:
-            motivos.append("formato: el lado tiene que ser compra o venta, no %r" % o.get("lado"))
-        if not isinstance(n, int) or isinstance(n, bool) or n <= 0:
-            motivos.append("formato: contratos tiene que ser un entero mayor que 0, no %r" % (n,))
-            n = 0
-        if precio is None or precio <= 0:
-            motivos.append("formato: precio tiene que ser un número mayor que 0, no %r" % o.get("precio"))
-        if globex != "abierto":
-            motivos.append("globex: %s (%s), %s NY" % (globex, motivo_globex, comun.hhmm(t)))
-        mercado, es_micro, punto = ct if ct else (None, True, 0.0)
-        if ct and mercado != mercado_cfg and cfg:
-            avisos.append("la orden es de %s y la config de %s: compruebo con las reglas de la cuenta y las ventanas de %s" % (mercado, mercado_cfg, mercado))
-        ventanas = ventanas_del_dia(agenda, fecha, mercado) if ct else []
-        perdida = None
-        riesgo_pts = None
-        if ct and lado in LADOS and precio and cierre:
-            info.append("cierre: solo se mira el formato y que Globex esté abierto")
-        if ct and lado in LADOS and precio and not cierre:
-            largo = lado == "compra"
-            if stop is None:
-                luego.append("stop: sin stop. Toda entrada lleva su stop puesto en la plataforma antes de confirmarla")
-            elif (largo and stop >= precio) or (not largo and stop <= precio):
-                luego.append("stop: el stop %s tiene que estar %s de la entrada %s en una %s" % (pts(stop), "debajo" if largo else "encima", pts(precio), lado))
-            else:
-                riesgo_pts = comun.al_tick(abs(precio - stop), comun.CONTRATOS[mercado]["tick"])
-                perdida = round(n * riesgo_pts * punto, 2)
-                if objetivo is not None and ((largo and objetivo <= precio) or (not largo and objetivo >= precio)):
-                    luego.append("objetivo: el objetivo %s tiene que estar %s de la entrada %s" % (pts(objetivo), "encima" if largo else "debajo", pts(precio)))
-                if por_op and perdida > por_op + 0.005:
-                    luego.append("pérdida: %d × %s pts × %s $/pt = %s al stop, más que tu riesgo por operación de %s"
-                                 % (n, pts(riesgo_pts), num(punto, 0), usd(perdida, 2), usd(por_op, 2)))
-                if pmd:
-                    usado = abierto + realizada + lote_riesgo
-                    if usado + perdida > pmd + 0.005:
-                        luego.append("día: %s abierto y perdido hoy más %s de esta = %s, más que tu pérdida máxima del día de %s"
-                                     % (usd(usado, 2), usd(perdida, 2), usd(usado + perdida, 2), usd(pmd)))
-                info.append("entrada %s, stop %s, objetivo %s: riesgo %s pts = %s por %s" % (
-                    pts(precio), pts(stop), pts(objetivo) if objetivo is not None else "ninguno", pts(riesgo_pts), usd(riesgo_pts * punto, 2), sim))
-                info.append("pérdida al stop %s%s" % (usd(perdida, 2), (" (riesgo por operación %s)" % usd(por_op, 2)) if por_op else ""))
-            if fyp and len(ops_hoy) + lote_entradas >= fyp:
-                luego.append("operaciones: hoy ya hay %d%s y tu regla son %d al día (tres fallos y paras)"
-                             % (len(ops_hoy), (" más %d de este archivo" % lote_entradas) if lote_entradas else "", fyp))
-            tope = c.get("max_micro") if es_micro else c.get("max_mini")
-            if tope and n > int(tope):
-                luego.append("contratos: %d %s, más que el tope de %d %s de tu cuenta" % (n, sim, int(tope), "micros" if es_micro else "minis"))
-            elif not tope and cfg:
-                avisos.append("tu cuenta no publica tope de %s: mira el de tu panel" % ("micros" if es_micro else "minis"))
-            # ventanas
-            apertura = comun.parse_hhmm(comun.CONTRATOS[mercado]["rth"][0])
-            if apertura <= t < mas_min(apertura, APERTURA_MIN):
-                luego.append("ventana: apertura %s–%s NY, los quince minutos más bruscos del día (son las %s)"
-                             % (comun.hhmm(apertura), comun.hhmm(mas_min(apertura, APERTURA_MIN)), comun.hhmm(t)))
-            for desde, hasta, motivo in ventanas:
-                if desde <= t <= hasta:
-                    luego.append("ventana: %s, de %s a %s NY no se abre ni se mantiene (son las %s)" % (motivo, comun.hhmm(desde), comun.hhmm(hasta), comun.hhmm(t)))
-            # horario
-            antes = comun.parse_hhmm(c["sin_entradas_antes"]) if c.get("sin_entradas_antes") else None
-            despues = comun.parse_hhmm(c["sin_entradas_despues"]) if c.get("sin_entradas_despues") else None
-            if antes and t < antes:
-                luego.append("horario: sin entradas antes de las %s NY (son las %s)" % (comun.hhmm(antes), comun.hhmm(t)))
-            if despues and t > despues:
-                luego.append("horario: sin entradas después de las %s NY (son las %s)" % (comun.hhmm(despues), comun.hhmm(t)))
-            plano = o.get("plan", {}).get("plano_a") if isinstance(o.get("plan"), dict) else None
-            plano = plano or c.get("plano_a") or comun.CONTRATOS[mercado]["plano"]
-            if c.get("plano_a") and comun.parse_hhmm(c["plano_a"]) < comun.parse_hhmm(plano):
-                plano = c["plano_a"]
-            if t >= comun.parse_hhmm(plano):
-                luego.append("horario: a las %s NY se está plano, no se abre nada (son las %s)" % (plano, comun.hhmm(t)))
-            if hora_limite_ny and t >= hora_limite_ny:
-                luego.append("horario: la hora límite de tu firma es %s %s (%s NY) y son las %s" % (c["hora_limite"], c.get("hora_limite_tz"), comun.hhmm(hora_limite_ny), comun.hhmm(t)))
-            if pmd or fyp:
-                info.append("hoy antes de esta: %d de %d operaciones, %s abierto, %s perdido, %s de %s del día"
-                            % (len(ops_hoy) + lote_entradas, fyp, usd(abierto), usd(realizada), usd(abierto + realizada + lote_riesgo), usd(pmd)))
+        r = _comprobar_accion(o, ctx) if es_orden_accion(o) else _comprobar_futuro(o, ctx)
+        motivos, avisos, info, luego, cierre = r["motivos"], r["avisos"], r["info"], r["luego"], r["cierre"]
         h = huella(o)
         if h in vistas:
             luego.append("duplicado: la misma orden aparece dos veces en el archivo")
         if h in huellas_hoy:
             luego.append("duplicado: esta misma orden (huella %s) ya está apuntada hoy en kemet/estado/dia.json" % h)
+        elif (r["sim"], r["lado"]) in claves_colocadas and not cierre:
+            luego.append("duplicado: hoy ya se colocó una %s de %s (kemet/estado/broker.json)" % (r["lado"], r["sim"]))
         vistas.add(h)
         if cierre:
             avisos.extend("cierre, no bloquea: " + x for x in luego)
         else:
             motivos.extend(luego)
         veredicto = "BLOCK" if motivos else "PASS"
-        if veredicto == "PASS" and not cierre and perdida is not None:
-            lote_entradas += 1
-            lote_riesgo += perdida
-        resultados.append({"indice": i, "simbolo": sim, "lado": lado, "contratos": o.get("contratos"), "tipo": o.get("tipo"),
-                           "precio": precio, "stop": stop, "objetivo": objetivo, "riesgo_pts": riesgo_pts, "perdida_max_usd": perdida,
-                           "clase": "cierre" if cierre else "entrada", "huella": h, "veredicto": veredicto,
-                           "motivos": motivos, "avisos": avisos, "info": info, "orden": o})
+        if veredicto == "PASS" and not cierre and r["perdida"] is not None:
+            ctx["lote_entradas"] += 1
+            ctx["lote_riesgo"] += r["perdida"]
+        if veredicto == "PASS" and r.get("efecto") and ctx["cuenta"]:
+            sim, lado, n, valor = r["efecto"]
+            cu = ctx["cuenta"]
+            signo = 1 if lado == "compra" else -1
+            cu["acciones"][sim] = cu["acciones"].get(sim, 0.0) + signo * n
+            if cu["efectivo"] is not None:
+                cu["efectivo"] -= signo * valor
+            cu["valores"][sim] = max(cu["valores"].get(sim, 0.0) + signo * valor, 0.0)
+        res = {"indice": i, "simbolo": r["sim"], "lado": r["lado"], "contratos": r["n"], "tipo": r["tipo"],
+               "precio": r["precio"], "stop": r["stop"], "objetivo": r["objetivo"], "riesgo_pts": r["riesgo_pts"], "perdida_max_usd": r["perdida"],
+               "clase": "cierre" if cierre else "entrada", "instrumento": r["instrumento"], "huella": h, "veredicto": veredicto,
+               "motivos": motivos, "avisos": avisos, "info": info, "orden": o}
+        if r["instrumento"] == "accion":
+            res["valor_usd"] = r.get("valor")
+        resultados.append(res)
     return {"fecha": fecha, "ahora_ny": ny.strftime("%Y-%m-%d %H:%M"), "ahora": comun.hora_doble(ahora_utc), "papel": bool(c.get("papel", True)),
             "cuenta": c.get("cuenta_nombre"), "resultados": resultados,
             "pass": sum(1 for r in resultados if r["veredicto"] == "PASS"), "block": sum(1 for r in resultados if r["veredicto"] == "BLOCK"),
-            "avisos": avisos_top, "hoy": {"operaciones": len(ops_hoy), "riesgo_abierto": round(abierto, 2), "perdida_realizada": round(realizada, 2),
-                                          "perdida_max_dia": pmd, "queda": round(pmd - abierto - realizada, 2) if pmd else None}}
-
+            "avisos": avisos_top, "hoy": {"operaciones": entradas_hoy, "riesgo_abierto": round(abierto, 2), "perdida_realizada": round(realizada, 2),
+                                          "perdida_max_dia": pmd, "queda": round(pmd - abierto - realizada, 2) if pmd else None,
+                                          "colocadas_broker": len(colocadas)}}
 
 def informe(res):
     lineas = ["RIESGO · %s · %s · %s" % (res.get("cuenta") or "sin cuenta", res["fecha"], res["ahora"])]
@@ -314,7 +639,10 @@ def cmd_check(a):
     cfg, existe = cargar_config()
     agenda = comun.leer_json("agenda.json", obligatorio=False)
     dia = leer_dia(fecha)
-    res = check(ordenes, cfg if existe else None, agenda, dia, ahora)
+    broker = comun.leer_json(comun.ruta(BROKER), obligatorio=False)
+    cartera = comun.leer_json(comun.ruta("portfolio.json"), obligatorio=False)
+    precios = comun.leer_json(comun.ruta("precios.json"), obligatorio=False)
+    res = check(ordenes, cfg if existe else None, agenda, dia, ahora, broker, cartera, precios)
     if not a.sin_escribir:
         rec = dict(res)
         rec["resultados"] = [{k: v for k, v in r.items()} for r in res["resultados"]]
@@ -343,9 +671,12 @@ def cmd_registrar(a):
             if r["huella"] in ya:
                 print("ya apuntada: %s %s %s (huella %s)" % (r["lado"], r["contratos"], r["simbolo"], r["huella"]))
                 continue
-            nuevas.append({"hora": hora, "simbolo": r["simbolo"], "lado": r["lado"], "contratos": r["contratos"], "entrada": r["precio"],
-                           "stop": r["stop"], "objetivo": r["objetivo"], "riesgo_usd": r["perdida_max_usd"], "resultado_usd": None,
-                           "cerrada": None, "huella": r["huella"]})
+            op = {"hora": hora, "simbolo": r["simbolo"], "lado": r["lado"], "contratos": r["contratos"], "entrada": r["precio"],
+                  "stop": r["stop"], "objetivo": r["objetivo"], "riesgo_usd": r["perdida_max_usd"], "resultado_usd": None,
+                  "cerrada": None, "huella": r["huella"]}
+            if r.get("instrumento") == "accion":
+                op["instrumento"] = "accion"
+            nuevas.append(op)
         if not nuevas:
             raise KemetError("no hay ninguna entrada con PASS en el último check que no esté ya apuntada")
         dia["operaciones"].extend(nuevas)

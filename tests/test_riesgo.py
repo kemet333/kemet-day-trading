@@ -1,4 +1,5 @@
-"""kemet-riesgo: PASS y BLOCK por orden, un cierre nunca se bloquea por el día, registrar y hoy. Sin red."""
+"""kemet-riesgo: PASS y BLOCK por orden, un cierre nunca se bloquea por el día, registrar y hoy; las acciones con la cuenta propia
+(TSLA del 11/11/2026, ruptura del rango de 15 minutos del fixture real) y la huella idéntica a la de kemet-broker. Sin red."""
 import contextlib
 import io
 import json
@@ -239,6 +240,188 @@ class TestRegistrarHoy(Base):
         code, out, err = run(["hoy", "--ahora", "2026-11-12 09:00"])     # otro día: limpio
         self.assertEqual(code, 0)
         self.assertIn("sin operaciones apuntadas", out)
+
+
+# Cuenta propia: 5.000 $, 50 $ por operación, 150 $ al día (tamano.py config --propia). La orden de kemet-tamano para TSLA el 11/11/2026:
+# rango de 15 min 386,35 a 392,67, la vela de las 10:10 cerró en 393,08 (10:15), stop en el punto medio 389,51, objetivo 1R 396,65:
+# 9 acciones (manda la posición máxima, 3.750 $), 32,13 $ al stop.
+CONFIG_PROPIA = {"mercado": "TSLA", "tipo_cuenta": "propia", "firma": None, "cuenta": "propia", "cuenta_nombre": "Cuenta propia · 5.000 $", "presupuesto": 5000,
+                 "efectivo_pct": 10, "max_posicion_pct": 75, "max_orden_usd": 4000, "min_orden_usd": 5, "perdida_max_dia": 150, "riesgo_por_operacion": 50,
+                 "fallos_y_paras": 3, "semaforo": "verde", "max_micro": None, "hora_limite": None, "hora_limite_tz": None, "sin_entradas_antes": "09:45",
+                 "sin_entradas_despues": "15:00", "plano_a": "15:55", "zona_usuario": "Europe/Madrid", "papel": True, "permitir_cortos": False,
+                 "permitir_margen": False, "permitir_opciones": False, "bloqueados": [], "sec_user_agent": "Nombre correo@ejemplo.com"}
+ORDEN_TSLA = {"symbol": "TSLA", "side": "buy", "qty": "9", "type": "market", "time_in_force": "day", "order_class": "bracket",
+              "take_profit_limit_price": "396.65", "stop_loss_stop_price": "389.51",
+              "why": "largo TSLA: 9 acciones, manda posición máxima (9 × 3,57 $ = 32,13 $ al stop)",
+              "plan": {"fecha": "2026-11-11", "lado": "largo", "entrada": 393.08, "stop": 389.51, "objetivo": 396.65, "hora_entrada": "10:15",
+                       "plano_a": "15:55", "riesgo_por_accion": 3.57, "perdida_max_usd": 32.13, "coste": 3537.72},
+              "instrumento": "accion"}
+CIERRE_TSLA = {"symbol": "TSLA", "side": "sell", "qty": "9", "type": "market", "time_in_force": "day", "instrumento": "accion"}
+
+
+class Acciones(Base):
+    def setUp(self):
+        super().setUp()
+        comun.escribir_json(os.path.join(self.kemet, "config.json"), CONFIG_PROPIA)
+        self.ordenes([ORDEN_TSLA])
+
+    def cartera(self, efectivo, posiciones=()):
+        comun.escribir_json(os.path.join(self.kemet, "portfolio.json"), {"efectivo": efectivo, "posiciones": list(posiciones), "actualizado": "2026-11-11T15:00:00Z"})
+
+    def broker(self, ordenes):
+        comun.escribir_json(os.path.join(self.kemet, "estado", "broker.json"), {"fecha": "2026-11-11", "ordenes": ordenes})
+
+    def test_pass_con_el_ejemplo_de_tsla(self):
+        code, res = self.check("2026-11-11 10:15", escribir=True)
+        self.assertEqual(code, 0, self.motivos(res))
+        r = res["resultados"][0]
+        self.assertEqual((r["veredicto"], r["clase"], r["instrumento"], r["simbolo"], r["lado"], r["contratos"]), ("PASS", "entrada", "accion", "TSLA", "compra", 9))
+        self.assertEqual((r["precio"], r["stop"], r["objetivo"], r["riesgo_pts"], r["perdida_max_usd"], r["valor_usd"]), (393.08, 389.51, 396.65, 3.57, 32.13, 3537.72))
+        self.assertEqual(res["hoy"]["queda"], 150.0)
+        code, out, err = run(["check", "--ahora", "2026-11-11 10:15", "--sin-escribir"])
+        self.assertIn("PASS  #1 compra 9 TSLA, entrada", out)
+        self.assertIn("riesgo 3,57 $ por acción", out)
+        # el usuario la pone: registrar la apunta como una operación más, en acciones
+        code, out, err = run(["registrar", "--abrir", "--ahora", "2026-11-11 10:16"])
+        self.assertEqual(code, 0, err)
+        op = self.leer("estado", "dia.json")["operaciones"][0]
+        self.assertEqual((op["simbolo"], op["contratos"], op["entrada"], op["riesgo_usd"], op["instrumento"]), ("TSLA", 9, 393.08, 32.13, "accion"))
+        code, out, err = run(["hoy", "--ahora", "2026-11-11 10:20"])
+        self.assertIn("Queda del día: 117,87 $ de 150 $", out)
+
+    def test_block_por_perdida_posicion_tamano_y_efectivo(self):
+        self.ordenes([dict(ORDEN_TSLA, qty="20")])
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 1)
+        m = self.motivos(res)
+        self.assertIn("pérdida: 20 × 3,57 $ por acción = 71,40 $ al stop, más que tu riesgo por operación de 50,00 $", m)
+        self.assertIn("tamaño: 7.861,60 $, más que tu orden máxima de 4.000 $", m)
+        self.assertIn("posición: TSLA sería 7.861,60 $, el 157,2 % de 5.000 $, más que tu tope del 75 % (3.750 $)", m)
+        self.assertIn("efectivo: hacen falta 7.861,60 $ y hay 5.000,00 $ de efectivo; eso sería margen", m)
+        self.ordenes([dict(ORDEN_TSLA, qty="10")])            # 35,70 $ al stop caben; 3.930,80 $ de posición no
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(res["resultados"][0]["motivos"], ["posición: TSLA sería 3.930,80 $, el 78,6 % de 5.000 $, más que tu tope del 75 % (3.750 $)"])
+
+    def test_block_por_efectivo_con_cartera(self):
+        self.cartera(2000.0)
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 1)
+        self.assertIn("efectivo: hacen falta 3.537,72 $ y hay 2.000,00 $ de efectivo; eso sería margen (dinero prestado) y no lo permites", self.motivos(res))
+        self.cartera(3900.0)
+        code, res = self.check("2026-11-11 10:15")
+        self.assertIn("efectivo: dejaría 362,28 $ de efectivo, por debajo de tu colchón del 10 % (500 $)", self.motivos(res))
+        self.cartera(4500.0)
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 0, self.motivos(res))
+
+    def test_block_por_corto_bloqueado_opciones_y_festivo(self):
+        corto = dict(ORDEN_TSLA, side="sell", take_profit_limit_price="389.51", stop_loss_stop_price="396.65",
+                     plan=dict(ORDEN_TSLA["plan"], lado="corto", stop=396.65, objetivo=389.51))
+        self.ordenes([corto])
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 1)
+        self.assertIn("corto: vendes 9 TSLA y tienes 0; vender en corto no está permitido", self.motivos(res))
+        comun.escribir_json(os.path.join(self.kemet, "config.json"), dict(CONFIG_PROPIA, permitir_cortos=True))
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 0, self.motivos(res))
+        self.assertEqual(res["resultados"][0]["clase"], "entrada")
+        comun.escribir_json(os.path.join(self.kemet, "config.json"), dict(CONFIG_PROPIA, bloqueados=["tsla"]))
+        self.ordenes([ORDEN_TSLA])
+        code, res = self.check("2026-11-11 10:15")
+        self.assertIn("bloqueado: TSLA está en tu lista de bloqueados", self.motivos(res))
+        comun.escribir_json(os.path.join(self.kemet, "config.json"), CONFIG_PROPIA)
+        self.ordenes([dict(ORDEN_TSLA, symbol="TSLA261120C00400000")])
+        code, res = self.check("2026-11-11 10:15")
+        self.assertIn("opciones: TSLA261120C00400000 es un contrato de opciones y tu cuenta no las permite", self.motivos(res))
+        self.ordenes([ORDEN_TSLA])
+        code, res = self.check("2026-11-26 10:15")           # Thanksgiving: la NYSE no abre
+        self.assertEqual(res["resultados"][0]["motivos"], ["mercado: NYSE cerrado (Thanksgiving), 10:15 NY"])
+        code, res = self.check("2026-11-11 09:20")
+        self.assertIn("mercado: NYSE cerrado (antes de la apertura (09:30 NY)), 09:20 NY", self.motivos(res))
+        code, res = self.check("2026-11-11 09:40")
+        self.assertIn("ventana: apertura 09:30–09:45 NY", self.motivos(res))
+        code, res = self.check("2026-11-11 15:58")
+        self.assertIn("horario: a las 15:55 NY se está plano", self.motivos(res))
+        self.assertNotIn("hora límite", self.motivos(res))    # una cuenta propia no tiene hora límite de firma
+
+    def test_duplicado_por_broker_y_por_dia(self):
+        h = riesgo.huella(ORDEN_TSLA)
+        self.broker([{"fecha": "2026-11-11", "cuando": "10:16", "huella": h, "simbolo": "TSLA", "lado": "compra", "cantidad": "9", "instrumento": "accion",
+                      "clase": "entrada", "perdida_al_stop": 32.13, "estado": "aprobada"},
+                     {"fecha": "2026-11-11", "cuando": "10:17", "huella": h, "simbolo": "TSLA", "lado": "compra", "cantidad": "9", "instrumento": "accion",
+                      "clase": "entrada", "perdida_al_stop": 32.13, "estado": "colocada", "id_broker": "abc"}])
+        code, res = self.check("2026-11-11 10:20")
+        self.assertEqual(code, 1)
+        self.assertIn("duplicado: esta misma orden (huella %s) ya está apuntada hoy" % h, self.motivos(res))
+        self.assertEqual((res["hoy"]["operaciones"], res["hoy"]["riesgo_abierto"], res["hoy"]["colocadas_broker"]), (1, 32.13, 1))
+        self.ordenes([dict(ORDEN_TSLA, qty="8")])            # otra huella, misma compra de TSLA colocada hoy
+        code, res = self.check("2026-11-11 10:20")
+        self.assertIn("duplicado: hoy ya se colocó una compra de TSLA (kemet/estado/broker.json)", self.motivos(res))
+        self.broker([{"fecha": "2026-11-11", "cuando": "10:17", "huella": h, "simbolo": "TSLA", "lado": "compra", "cantidad": "9", "instrumento": "accion",
+                      "clase": "entrada", "perdida_al_stop": 32.13, "estado": "denegada"}])
+        self.ordenes([ORDEN_TSLA])
+        code, res = self.check("2026-11-11 10:20")
+        self.assertEqual(code, 0, self.motivos(res))         # una denegada no cuenta
+        self.dia([{"hora": "10:16", "simbolo": "TSLA", "lado": "compra", "contratos": 9, "riesgo_usd": 32.13, "resultado_usd": None, "cerrada": None, "huella": h}])
+        code, res = self.check("2026-11-11 10:20")
+        self.assertIn("duplicado: esta misma orden (huella %s) ya está apuntada hoy en kemet/estado/dia.json" % h, self.motivos(res))
+
+    def test_una_venta_de_cierre_pasa_con_el_dia_agotado(self):
+        self.dia([{"hora": "10:16", "simbolo": "TSLA", "lado": "compra", "contratos": 9, "riesgo_usd": 32.13, "resultado_usd": -150.0, "cerrada": "12:00"},
+                  {"hora": "13:00", "simbolo": "TSLA", "lado": "compra", "contratos": 9, "riesgo_usd": 32.13, "resultado_usd": None, "cerrada": None}])
+        self.cartera(1462.28, [{"simbolo": "TSLA", "cantidad": 9, "precio_medio": 393.08}])
+        self.ordenes([ORDEN_TSLA, CIERRE_TSLA])                # la entrada no cabe; la venta de las 9 que tienes, sí
+        code, res = self.check("2026-11-11 15:50")
+        self.assertEqual(code, 1)
+        self.assertEqual([r["veredicto"] for r in res["resultados"]], ["BLOCK", "PASS"])
+        self.assertIn("día:", self.motivos(res))
+        self.assertEqual((res["resultados"][1]["clase"], res["resultados"][1]["motivos"]), ("cierre", []))
+        self.assertTrue(any("venta de 9 acciones que tienes" in x for x in res["resultados"][1]["info"]))
+        os.remove(os.path.join(self.kemet, "portfolio.json"))
+        self.ordenes([dict(CIERRE_TSLA, cierre=True)])         # sin cartera, "cierre": true lo declara
+        code, res = self.check("2026-11-11 15:58")
+        self.assertEqual(code, 0)
+        self.assertEqual(res["resultados"][0]["clase"], "cierre")
+        self.ordenes([CIERRE_TSLA])                            # sin cartera y sin declararlo, vender es un corto
+        code, res = self.check("2026-11-11 15:50")
+        self.assertEqual(code, 1)
+        self.assertIn("corto:", self.motivos(res))
+
+    def test_precio_fresco_formato_y_sin_config(self):
+        comun.escribir_json(os.path.join(self.kemet, "precios.json"), {"generado": "2026-11-11T15:14:00Z", "precios": {"TSLA": {"precio": 399.0, "leido": "2026-11-11T15:14:00Z"}}})
+        self.ordenes([dict(ORDEN_TSLA, qty="14")])            # 14 × 3,57 = 49,98 $ caben con la entrada del plan; con 399 no
+        code, res = self.check("2026-11-11 10:15")
+        m = self.motivos(res)
+        self.assertIn("pérdida: 14 × 9,49 $ por acción = 132,86 $ al stop", m)
+        self.assertIn("objetivo: el objetivo 396,65 $ tiene que estar encima de la entrada 399,00 $", m)
+        self.assertTrue(any("se mide desde 399,00 $" in x for x in res["resultados"][0]["info"]))
+        os.remove(os.path.join(self.kemet, "precios.json"))
+        self.ordenes([{"symbol": "tsla", "side": "hold", "qty": "1.5", "type": "limit", "time_in_force": "week", "order_class": "bracket"}])
+        code, res = self.check("2026-11-11 10:15")
+        m = self.motivos(res)
+        for trozo in ("side tiene que ser buy o sell", "qty tiene que ser un entero", "una orden limit necesita limit_price", "time_in_force tiene que ser day o gtc",
+                      "una orden bracket lleva take_profit_limit_price y stop_loss_stop_price"):
+            self.assertIn(trozo, m)
+        self.ordenes([dict(ORDEN_TSLA, qty=9)])
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 0)
+        self.assertTrue(any("qty va como texto" in a for a in res["resultados"][0]["avisos"]))
+        comun.escribir_json(os.path.join(self.kemet, "config.json"), CONFIG)   # la cuenta de firma no sirve para acciones
+        self.ordenes([ORDEN_TSLA])
+        code, res = self.check("2026-11-11 10:15")
+        self.assertIn("cuenta: tu config es de una cuenta de firma", self.motivos(res))
+        os.remove(os.path.join(self.kemet, "config.json"))
+        code, res = self.check("2026-11-11 10:15")
+        self.assertEqual(code, 0, self.motivos(res))         # sin config: los topes por defecto de una cuenta propia
+        self.assertTrue(any("valores por defecto de una cuenta propia" in a for a in res["avisos"]))
+
+    def test_huella_identica_a_la_de_kemet_broker(self):
+        broker = load("kemet-broker", "broker")
+        for o in (ORDEN_TSLA, CIERRE_TSLA, dict(CIERRE_TSLA, cierre=True), ORDEN, CIERRE, dict(ORDEN, instrumento="futuro")):
+            self.assertEqual(riesgo.huella(o), broker.huella(o), o)
+        self.assertEqual(riesgo.huella(dict(ORDEN, instrumento="futuro")), riesgo.huella(ORDEN))   # el instrumento no cambia la huella
+        self.assertEqual(riesgo.huella(dict(ORDEN_TSLA, why="otra nota")), riesgo.huella(ORDEN_TSLA))
+        self.assertNotEqual(riesgo.huella(dict(ORDEN_TSLA, qty="8")), riesgo.huella(ORDEN_TSLA))
 
 
 if __name__ == "__main__":
