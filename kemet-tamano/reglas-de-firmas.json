@@ -1,0 +1,1235 @@
+{
+ "updated": "2026-11-11",
+ "note": "Reglas tomadas de las webs oficiales de cada firma. Pueden cambiar: confírmalas en tu panel.",
+ "firms": [
+  {
+   "id": "topstep",
+   "name": "Topstep",
+   "checked": "24/10/2026",
+   "source": "https://help.topstep.com/en/articles/8284197-trading-combine-parameters",
+   "accounts": [
+    {
+     "id": "combine-50",
+     "label": "Trading Combine 50K",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 5,
+     "max_micro": 50,
+     "flat_by": {
+      "time": "15:10",
+      "tz": "America/Chicago"
+     },
+     "news": "CPI, NFP, PPI y FOMC: sin abrir minis en la ventana (±5 min); máx. 3 micros",
+     "consistency": "mejor día ≤ 55% del beneficio",
+     "note": "Límite diario opcional: solo si lo elegiste al comprar"
+    },
+    {
+     "id": "combine-100",
+     "label": "Trading Combine 100K",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "15:10",
+      "tz": "America/Chicago"
+     },
+     "news": "CPI, NFP, PPI y FOMC: sin abrir minis en la ventana (±5 min); máx. 6 micros",
+     "consistency": "mejor día ≤ 55% del beneficio",
+     "note": "Límite diario opcional: solo si lo elegiste al comprar"
+    },
+    {
+     "id": "combine-150",
+     "label": "Trading Combine 150K",
+     "phase": "evaluation",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "max_mini": 15,
+     "max_micro": 150,
+     "flat_by": {
+      "time": "15:10",
+      "tz": "America/Chicago"
+     },
+     "news": "CPI, NFP, PPI y FOMC: sin abrir minis en la ventana (±5 min); máx. 9 micros",
+     "consistency": "mejor día ≤ 55% del beneficio",
+     "note": "Límite diario opcional: solo si lo elegiste al comprar"
+    },
+    {
+     "id": "xfa-50",
+     "label": "Express Funded 50K",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "flat_by": {
+      "time": "15:10",
+      "tz": "America/Chicago"
+     },
+     "news": "CPI, NFP, PPI y FOMC: sin minis en la ventana; micros según tu saldo",
+     "consistency": "ruta consistencia: mejor día ≤ 40%",
+     "note": "Contratos según el Scaling Plan: mira tu límite en TopstepX. Límite diario solo si lo elegiste en el Combine"
+    },
+    {
+     "id": "xfa-100",
+     "label": "Express Funded 100K",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "flat_by": {
+      "time": "15:10",
+      "tz": "America/Chicago"
+     },
+     "news": "CPI, NFP, PPI y FOMC: sin minis en la ventana; micros según tu saldo",
+     "consistency": "ruta consistencia: mejor día ≤ 40%",
+     "note": "Contratos según el Scaling Plan: mira tu límite en TopstepX. Límite diario solo si lo elegiste en el Combine"
+    },
+    {
+     "id": "xfa-150",
+     "label": "Express Funded 150K",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "flat_by": {
+      "time": "15:10",
+      "tz": "America/Chicago"
+     },
+     "news": "CPI, NFP, PPI y FOMC: sin minis en la ventana; micros según tu saldo",
+     "consistency": "ruta consistencia: mejor día ≤ 40%",
+     "note": "Contratos según el Scaling Plan: mira tu límite en TopstepX. Límite diario solo si lo elegiste en el Combine"
+    }
+   ]
+  },
+  {
+   "id": "tradeify",
+   "name": "Tradeify",
+   "checked": "24/10/2026",
+   "source": "https://help.tradeify.co/en/articles/12268167-essential-trading-rules-overview",
+   "accounts": [
+    {
+     "id": "growth-eval-25",
+     "label": "Growth 25K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 600,
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "growth-funded-25",
+     "label": "Growth 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 600,
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 35% para cobrar"
+    },
+    {
+     "id": "growth-eval-50",
+     "label": "Growth 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1250,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "growth-funded-50",
+     "label": "Growth 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1250,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 35% para cobrar"
+    },
+    {
+     "id": "growth-eval-100",
+     "label": "Growth 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2500,
+     "max_mini": 8,
+     "max_micro": 80,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "growth-funded-100",
+     "label": "Growth 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2500,
+     "max_mini": 8,
+     "max_micro": 80,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 35% para cobrar"
+    },
+    {
+     "id": "growth-eval-150",
+     "label": "Growth 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 5000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3750,
+     "max_mini": 12,
+     "max_micro": 120,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "growth-funded-150",
+     "label": "Growth 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 5000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3750,
+     "max_mini": 12,
+     "max_micro": 120,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 35% para cobrar"
+    },
+    {
+     "id": "select-eval-25",
+     "label": "Select 25K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "select-eval-50",
+     "label": "Select 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "select-eval-100",
+     "label": "Select 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 8,
+     "max_micro": 80,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "select-eval-150",
+     "label": "Select 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 12,
+     "max_micro": 120,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "lightning-25",
+     "label": "Lightning 25K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "20% en el primer cobro, luego 25% y 30%"
+    },
+    {
+     "id": "lightning-50",
+     "label": "Lightning 50K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1250,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "20% en el primer cobro, luego 25% y 30%"
+    },
+    {
+     "id": "lightning-100",
+     "label": "Lightning 100K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 4000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2500,
+     "max_mini": 8,
+     "max_micro": 80,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "20% en el primer cobro, luego 25% y 30%"
+    },
+    {
+     "id": "lightning-150",
+     "label": "Lightning 150K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 5250,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "max_mini": 12,
+     "max_micro": 120,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "20% en el primer cobro, luego 25% y 30%"
+    }
+   ]
+  },
+  {
+   "id": "alpha",
+   "name": "Alpha Futures",
+   "checked": "24/10/2026",
+   "source": "https://alpha-futures.com/how-it-works",
+   "accounts": [
+    {
+     "id": "zero-eval-25",
+     "label": "Zero 25K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 500,
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "zero-funded-25",
+     "label": "Zero 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 500,
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día < 40% para cobrar"
+    },
+    {
+     "id": "zero-eval-50",
+     "label": "Zero 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "zero-funded-50",
+     "label": "Zero 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día < 40% para cobrar",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "zero-eval-100",
+     "label": "Zero 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "zero-funded-100",
+     "label": "Zero 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día < 40% para cobrar",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "standard-eval-50",
+     "label": "Standard 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 5,
+     "max_micro": 50,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% para pasar"
+    },
+    {
+     "id": "standard-funded-50",
+     "label": "Standard 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 5,
+     "max_micro": 50,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día < 40% para cobrar",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "standard-eval-100",
+     "label": "Standard 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% para pasar"
+    },
+    {
+     "id": "standard-funded-100",
+     "label": "Standard 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día < 40% para cobrar",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "standard-eval-150",
+     "label": "Standard 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 15,
+     "max_micro": 150,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% para pasar"
+    },
+    {
+     "id": "standard-funded-150",
+     "label": "Standard 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "max_mini": 15,
+     "max_micro": 150,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día < 40% para cobrar",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "advanced-eval-50",
+     "label": "Advanced 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1750,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 5,
+     "max_micro": 50,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "advanced-funded-50",
+     "label": "Advanced 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 1750,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 5,
+     "max_micro": 50,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "advanced-eval-100",
+     "label": "Advanced 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "advanced-funded-100",
+     "label": "Advanced 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "advanced-eval-150",
+     "label": "Advanced 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 5250,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 15,
+     "max_micro": 150,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar"
+    },
+    {
+     "id": "advanced-funded-150",
+     "label": "Advanced 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 5250,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 15,
+     "max_micro": 150,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    }
+   ]
+  },
+  {
+   "id": "lucid",
+   "name": "Lucid Trading",
+   "checked": "24/10/2026",
+   "source": "https://support.lucidtrading.com",
+   "accounts": [
+    {
+     "id": "flex-eval-25",
+     "label": "LucidFlex 25K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar",
+     "note": "Límite diario opcional al comprar: su importe no está publicado"
+    },
+    {
+     "id": "flex-funded-25",
+     "label": "LucidFlex 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "flex-eval-50",
+     "label": "LucidFlex 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar",
+     "note": "Límite diario opcional al comprar: su importe no está publicado"
+    },
+    {
+     "id": "flex-funded-50",
+     "label": "LucidFlex 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "flex-eval-100",
+     "label": "LucidFlex 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar",
+     "note": "Límite diario opcional al comprar: su importe no está publicado"
+    },
+    {
+     "id": "flex-funded-100",
+     "label": "LucidFlex 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "flex-eval-150",
+     "label": "LucidFlex 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar",
+     "note": "Límite diario opcional al comprar: su importe no está publicado"
+    },
+    {
+     "id": "flex-funded-150",
+     "label": "LucidFlex 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos según el plan de escalado: empiezas con menos"
+    },
+    {
+     "id": "pro-eval-25",
+     "label": "LucidPro 25K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido"
+    },
+    {
+     "id": "pro-funded-25",
+     "label": "LucidPro 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para cobrar"
+    },
+    {
+     "id": "pro-eval-50",
+     "label": "LucidPro 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1200,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Límite diario opcional: solo si lo activaste al comprar"
+    },
+    {
+     "id": "pro-funded-50",
+     "label": "LucidPro 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1200,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para cobrar"
+    },
+    {
+     "id": "pro-eval-100",
+     "label": "LucidPro 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1800,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Límite diario opcional: solo si lo activaste al comprar"
+    },
+    {
+     "id": "pro-funded-100",
+     "label": "LucidPro 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1800,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para cobrar"
+    },
+    {
+     "id": "pro-eval-150",
+     "label": "LucidPro 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2700,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Límite diario opcional: solo si lo activaste al comprar"
+    },
+    {
+     "id": "pro-funded-150",
+     "label": "LucidPro 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2700,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para cobrar"
+    },
+    {
+     "id": "direct-25",
+     "label": "LucidDirect 25K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 20% para cobrar"
+    },
+    {
+     "id": "direct-50",
+     "label": "LucidDirect 50K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1200,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 20% para cobrar"
+    },
+    {
+     "id": "direct-100",
+     "label": "LucidDirect 100K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 3500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2100,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 20% para cobrar"
+    },
+    {
+     "id": "direct-150",
+     "label": "LucidDirect 150K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 5000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 20% para cobrar"
+    }
+   ]
+  },
+  {
+   "id": "apex",
+   "name": "Apex Trader Funding",
+   "checked": "30/10/2026",
+   "source": "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/eod-evaluations/",
+   "accounts": [
+    {
+     "id": "eod-eval-25",
+     "label": "25K EOD · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 500,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu cierre diario (EOD)"
+    },
+    {
+     "id": "eod-pa-25",
+     "label": "25K EOD · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 500,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "eod-eval-50",
+     "label": "50K EOD · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu cierre diario (EOD)"
+    },
+    {
+     "id": "eod-pa-50",
+     "label": "50K EOD · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "eod-eval-100",
+     "label": "100K EOD · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1500,
+     "max_mini": 14,
+     "max_micro": 140,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu cierre diario (EOD)"
+    },
+    {
+     "id": "eod-pa-100",
+     "label": "100K EOD · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1500,
+     "max_mini": 14,
+     "max_micro": 140,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "eod-eval-150",
+     "label": "150K EOD · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 17,
+     "max_micro": 170,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu cierre diario (EOD)"
+    },
+    {
+     "id": "eod-pa-150",
+     "label": "150K EOD · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 4000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 17,
+     "max_micro": 170,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "intraday-eval-25",
+     "label": "25K Intradía · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu máximo en vivo, también con posiciones abiertas"
+    },
+    {
+     "id": "intraday-pa-25",
+     "label": "25K Intradía · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "intraday-eval-50",
+     "label": "50K Intradía · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu máximo en vivo, también con posiciones abiertas"
+    },
+    {
+     "id": "intraday-pa-50",
+     "label": "50K Intradía · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "intraday-eval-100",
+     "label": "100K Intradía · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 14,
+     "max_micro": 140,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu máximo en vivo, también con posiciones abiertas"
+    },
+    {
+     "id": "intraday-pa-100",
+     "label": "100K Intradía · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 14,
+     "max_micro": 140,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    },
+    {
+     "id": "intraday-eval-150",
+     "label": "150K Intradía · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 17,
+     "max_micro": 170,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Drawdown que se mueve con tu máximo en vivo, también con posiciones abiertas"
+    },
+    {
+     "id": "intraday-pa-150",
+     "label": "150K Intradía · fondeada (PA)",
+     "phase": "funded",
+     "max_loss": 4000,
+     "max_loss_type": "intraday_trailing",
+     "max_mini": 17,
+     "max_micro": 170,
+     "flat_by": {
+      "time": "16:59",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
+     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+    }
+   ]
+  }
+ ]
+}

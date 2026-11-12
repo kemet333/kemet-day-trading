@@ -1,0 +1,11 @@
+{
+  "reglas": [
+    {"id": "apertura-nq", "tipo": "apertura", "simbolo": "NQ"},
+    {"id": "nq-plan-stop", "simbolo": "NQ", "tipo": "stop", "precio": 28312.5, "lado": "largo", "nota": "stop del plan, ib-medio", "fecha": "2026-11-11"},
+    {"id": "nq-plan-objetivo", "simbolo": "NQ", "tipo": "objetivo", "precio": 28547.0, "lado": "largo", "nota": "objetivo del plan, R:1", "fecha": "2026-11-11"},
+    {"id": "nq-plano-a", "simbolo": "NQ", "tipo": "hora", "a": "15:55", "etiqueta": "plano a", "fecha": "2026-11-11"},
+    {"id": "hora-limite", "tipo": "hora_limite"},
+    {"id": "nq-encima-28500", "simbolo": "NQ", "tipo": "encima", "precio": 28500.0, "nota": "máximo de ayer"},
+    {"id": "nq-pct-1", "simbolo": "NQ", "tipo": "pct", "pct": 1.0, "direccion": "baja"}
+  ]
+}

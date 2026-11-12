@@ -1,0 +1,23 @@
+fecha,hora,simbolo,lado,contratos,entrada,salida,stop,pnl,nota
+2026-11-02,09:52,MNQ,largo,2,26812.5,26880,26772.5,270,ruptura del OR tras el retroceso
+2026-11-02,11:05,MNQ,corto,2,26905,26925,26945,-80,rechazo del PDH
+2026-11-03,09:38,MNQ,largo,2,26950,26905,26910,-180,"entrada en la apertura, se fue de largo"
+2026-11-03,10:15,MNQ,largo,2,26990,27050,26950,240,continuación sobre el IB
+2026-11-03,13:40,MNQ,corto,2,27080,27130,,-200,"sin stop puesto, cerrada a mano"
+2026-11-04,10:02,MNQ,largo,2,27210,27145,27170,-260,stop movido 25 pts abajo
+2026-11-04,10:48,MNQ,largo,2,27180,27140,27140,-160,segundo intento
+2026-11-04,11:20,MNQ,corto,2,27150,27190,27190,-160,tercera pérdida
+2026-11-04,11:52,MNQ,largo,3,27120,27090,27080,-180,"para recuperar, con 3 micros"
+2026-11-05,10:10,MNQ,largo,2,27320,27400,27280,320,ruptura del IB
+2026-11-05,14:05,MNQ,corto,2,27410,27365,27450,180,fallo de ruptura en la tarde
+2026-11-06,08:35,MNQ,largo,2,27500,27455,27460,-180,justo después del dato de empleo
+2026-11-06,10:25,MNQ,largo,2,27530,27600,27490,280,continuación
+2026-11-09,09:47,MNQ,corto,2,27880,27830,27920,200,rechazo del ONH
+2026-11-09,12:30,MNQ,largo,2,27850,27810,,-160,"hora de comer, sin stop"
+2026-11-09,15:58,MNQ,largo,1,27900,27885,27860,-30,después de la hora de estar plano
+2026-11-10,10:05,MNQ,largo,2,28120,28200,28080,320,ruptura del IB
+2026-11-10,10:50,MNQ,largo,2,28210,28170,28170,-160,"segunda entrada, al stop"
+2026-11-10,13:15,MNQ,corto,2,28260,28245,28300,60,rango de la tarde
+2026-11-11,09:41,MNQ,largo,2,28300,28260,28260,-160,apertura
+2026-11-11,10:45,MNQ,largo,2,28429.75,28547,28312.5,469,"ruptura del balance inicial, stop en el punto medio"
+2026-11-11,14:15,MNQ,corto,2,28560,28540,28600,80,retroceso tras la subasta

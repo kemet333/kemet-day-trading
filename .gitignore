@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+kemet/
+.DS_Store

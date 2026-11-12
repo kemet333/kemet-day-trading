@@ -1,0 +1,11 @@
+{
+  "name": "kemet-day-trading",
+  "description": "Once skills de Claude para day trading de futuros en cuentas de fondeo: niveles, plan de sesión, la ruptura del balance inicial vela a vela, stop y objetivo, una máquina del tiempo que repite la sesión 10.000 veces, tamaño y riesgo con las reglas de tu firma, alertas, diario y geometría de riesgo.",
+  "version": "1.0.0",
+  "author": { "name": "Kemet Capital", "url": "https://kemet-capital.com" },
+  "homepage": "https://kemet-capital.com/skill",
+  "repository": "https://github.com/kemet333/kemet-day-trading",
+  "license": "MIT",
+  "keywords": ["claude-code", "claude-skills", "day-trading", "futures", "prop-firms", "topstep", "apex", "nq", "es", "backtesting"],
+  "skills": "./"
+}

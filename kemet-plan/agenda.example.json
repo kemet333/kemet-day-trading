@@ -1,0 +1,16 @@
+{
+ "nota": "Ejemplo con las horas típicas de los datos de EE. UU., no la agenda real del 2026-11-11. Copia a kemet/agenda.json con la fecha y los datos del día, o escríbela con `plan.py agenda --fecha ... --dato \"08:30 IPC fuerte\"`. Horas de Nueva York. `fuerte` abre una ventana de 20 minutos a cada lado (10 sin él); `mercados` limita el dato a esos contratos (sin la clave vale para todos).",
+ "fecha": "2026-11-11",
+ "datos": [
+  {"hora": "08:30", "nombre": "IPC", "fuerte": true},
+  {"hora": "10:00", "nombre": "ISM servicios", "fuerte": false},
+  {"hora": "10:30", "nombre": "Inventarios EIA", "fuerte": false, "mercados": ["CL"]},
+  {"hora": "14:00", "nombre": "Subasta del Tesoro a 10 años", "fuerte": false}
+ ],
+ "tipicos": {
+  "08:30": "IPC, NFP (primer viernes), PCE, PIB, PPI, ventas minoristas, peticiones semanales de desempleo (jueves)",
+  "10:00": "ISM manufacturero y de servicios, confianza del consumidor, ventas de viviendas",
+  "10:30": "inventarios de crudo de la EIA (miércoles, solo CL)",
+  "14:00": "decisión del FOMC (y rueda de prensa a las 14:30), actas del FOMC, subastas del Tesoro"
+ }
+}
