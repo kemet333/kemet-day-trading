@@ -23,7 +23,7 @@ argument-hint: "plan [--mercado NQ] [--stop PTS] [--semaforo verde|ambar|rojo] [
 
 Un plan de sesión es una hoja escrita antes de que abra el mercado: a qué horas no toco nada, qué niveles tengo
 marcados, cuántos contratos caben con mi stop en mi límite de hoy y a qué hora tengo que estar plano. Este tool la
-escribe con la plantilla de `kemet-mesa/references/plan-de-sesion.md`, con cifras y horas, para que al usuario le
+escribe con la plantilla de `kemet-desk/references/plan-de-sesion.md`, con cifras y horas, para que al usuario le
 quede una sola cosa que hacer a continuación. No dice hacia dónde irá el precio.
 La mayoría de los que hacen day trading pierde dinero, y una herramienta no cambia eso.
 

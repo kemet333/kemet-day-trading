@@ -14,7 +14,7 @@ de entrada que trae es la didáctica, sin filtro: la máquina del tiempo enseña
 veces es un coin flip. La mayoría de los que hacen day trading pierde dinero, y una herramienta no cambia eso.
 
 Hecho por [Kemet Capital](https://kemet-capital.com). Los sistemas que Kemet opera con agentes en cuentas de
-fondeo llevan filtros y parámetros validados en su propio banco; no están en este pack: esto es la mesa, abierta. La arquitectura sigue la de [The Day Trader skill](https://github.com/Jakeschincariol/day-trader-skill)
+fondeo llevan filtros y parámetros validados en su propio banco; no están en este pack: esto es el desk, abierto. La arquitectura sigue la de [The Day Trader skill](https://github.com/Jakeschincariol/day-trader-skill)
 de Jake Schincariol (MIT), que es para acciones de EE. UU.; esta es para futuros y prop firms, en español.
 
 ## Instalar
@@ -53,7 +53,7 @@ Hace falta Python 3.8 o más nuevo. Nada que instalar con pip. Funciona en Mac, 
 
 | comando | qué es | qué hace |
 | --- | --- | --- |
-| `/kemet-mesa` | La mesa | Te sitúa (mercado, firma, cuenta, stop, horario), elige la pieza y las encadena en orden. |
+| `/kemet-desk` | El desk | Te sitúa (mercado, firma, cuenta, stop, horario), elige la pieza y las encadena en orden. |
 | `/kemet-niveles` | Niveles | Máximo, mínimo y cierre de ayer, rango nocturno, apertura y balance inicial, y dónde está el precio. |
 | `/kemet-plan` | Plan de sesión | El plan escrito: franjas, ventanas de datos en las que no se opera, semáforo, niveles, tamaño, hora límite de tu firma. |
 | `/kemet-entrada` | Entrada | La ruptura del balance inicial vela a vela: formando, esperando, disparado o caducado. |
@@ -166,7 +166,7 @@ ver en la máquina del tiempo lo que habría hecho en las sesiones anteriores. N
 ## Archivos
 
 ```
-kemet-mesa/        SKILL.md, references/ (plan de sesión, revisión)
+kemet-desk/        SKILL.md, references/ (plan de sesión, revisión)
 kemet-niveles/     SKILL.md, niveles.py
 kemet-plan/        SKILL.md, plan.py, agenda.example.json
 kemet-entrada/     SKILL.md, entrada.py

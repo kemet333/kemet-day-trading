@@ -7,7 +7,7 @@ import unittest
 
 from _load import ROOT
 
-SKILLS = ["kemet-mesa", "kemet-niveles", "kemet-plan", "kemet-entrada", "kemet-salida", "kemet-maquina",
+SKILLS = ["kemet-desk", "kemet-niveles", "kemet-plan", "kemet-entrada", "kemet-salida", "kemet-maquina",
           "kemet-tamano", "kemet-riesgo", "kemet-alertas", "kemet-diario", "kemet-geometria"]
 TOOLS = {"kemet-niveles": "niveles", "kemet-plan": "plan", "kemet-entrada": "entrada", "kemet-salida": "salida", "kemet-maquina": "maquina",
          "kemet-tamano": "tamano", "kemet-riesgo": "riesgo", "kemet-alertas": "alertas", "kemet-diario": "diario"}

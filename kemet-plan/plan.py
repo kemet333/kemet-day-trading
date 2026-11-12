@@ -7,7 +7,7 @@
     python3 plan.py plan --stop 40 --drawdown 2500 --diario 1000     # sin config: tus límites a mano
     python3 plan.py agenda --fecha 2026-11-11 --dato "08:30 IPC fuerte" --dato "10:30 Inventarios EIA CL"
 
-plan    Escribe el plan de `kemet-mesa/references/plan-de-sesion.md`: las franjas de la sesión de Nueva York (y su
+plan    Escribe el plan de `kemet-desk/references/plan-de-sesion.md`: las franjas de la sesión de Nueva York (y su
         hora en Madrid), las ventanas en las que no se opera (10 minutos a cada lado de cada dato de kemet/agenda.json,
         20 si es fuerte; la apertura 09:30–09:45 para quien empieza; los 5 minutos antes de estar plano), el semáforo
         del día con sus razones, los niveles de la sesión anterior y de la noche, el tamaño con la regla Kemet y la

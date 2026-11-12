@@ -18,7 +18,7 @@ Qué cuenta (hechos, no calificaciones): operaciones sin stop, entradas en la ap
 ventanas de datos de kemet/agenda.json si es de un día del archivo, riesgo al stop por encima del riesgo por operación
 de la config, pérdidas mayores que el stop, entradas después de plano_a, de la hora límite de la firma y de
 sin_entradas_despues, días que superaron perdida_max_dia y entradas después de la tercera pérdida del día. Después las
-métricas (con 20 operaciones o más) y la revisión de kemet-mesa: tres cosas bien con evidencia, dos rupturas del plan
+métricas (con 20 operaciones o más) y la revisión de kemet-desk: tres cosas bien con evidencia, dos rupturas del plan
 con su coste, una sola corrección para mañana.
 
 Código de salida: 0 si no hay rupturas del plan, 1 si las hay, 2 si hay un error.

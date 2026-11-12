@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kemet-day-trading",
-  "description": "Kemet Day Trading: la mesa de futuros para cuentas de fondeo, dentro de Claude",
+  "description": "Kemet Day Trading: el desk de futuros para cuentas de fondeo, dentro de Claude",
   "owner": { "name": "Kemet Capital", "url": "https://kemet-capital.com" },
   "plugins": [
     {

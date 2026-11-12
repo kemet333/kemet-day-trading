@@ -8,7 +8,7 @@ description: >-
   entradas después de la hora de estar plano y de la hora límite de la firma, días que superaron la pérdida
   máxima del día, entradas después de la tercera pérdida; resultado por franja horaria y por día de la
   semana; métricas con 20 operaciones o más (expectativa en dólares y en R, acierto y ratio, ganancias
-  entre pérdidas, racha, drawdown frente al de la cuenta); y la revisión de kemet-mesa: tres cosas bien con la
+  entre pérdidas, racha, drawdown frente al de la cuenta); y la revisión de kemet-desk: tres cosas bien con la
   operación que lo demuestra, dos rupturas del plan con su coste en dólares, una sola corrección para
   mañana. Nunca califica al trader. Úsala cuando el usuario diga «revísame el diario», «cómo me ha ido»,
   «qué estoy haciendo mal», «aquí están mis operaciones», «analiza mi semana», o al cerrar una sesión. Va
@@ -64,7 +64,7 @@ entrada, salida, lado, contratos y el valor del punto. Si falta `stop` la operac
    Cada una con su número de operaciones, su coste (lo que perdieron esas operaciones; en tamaño y stop, el
    exceso) y las filas que lo demuestran. Lo que el archivo no deja medir (sin config, sin agenda) se dice
    «no medible».
-2. **Por franja horaria** (las de kemet-mesa: preapertura, apertura, mejor franja 09:45–11:30, hora de
+2. **Por franja horaria** (las de kemet-desk: preapertura, apertura, mejor franja 09:45–11:30, hora de
    comer, tarde, cierre) y **por día**: operaciones, resultado, a qué hora se superó el límite y cuántas
    entradas hubo después.
 3. **Métricas** solo con 20 operaciones o más: expectativa por operación en dólares y en R, acierto y ratio
