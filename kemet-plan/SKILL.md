@@ -3,14 +3,14 @@ name: kemet-plan
 description: >-
   Plan de sesión escrito antes de abrir, para futuros intradía (ES, NQ, CL, GC) en cuentas de fondeo y para
   acciones de EE. UU. con la cuenta propia. Junta las franjas de Nueva York con su hora en Madrid, las
-  ventanas sin operar (alrededor de cada dato de la agenda, la apertura 09:30 a 09:45 y los minutos antes de
-  estar plano), el semáforo del día, los niveles de ayer y de la noche, el tamaño por operación con la regla
-  Kemet y la hora límite de la firma. Con una acción, el tamaño va en acciones enteras con el stop en dólares
-  por acción, sin hora límite ni niveles de la noche. También guarda la agenda de datos del día, a mano o
-  desde el calendario gratuito de Forex Factory. Úsala cuando el usuario diga «hazme el plan de hoy», «qué
-  datos salen hoy», «a qué hora no opero», «cuántos contratos hoy con stop de 40», «cuántas acciones de TSLA
-  con stop de 3 dólares», «apunta que a las 8:30 sale el IPC», o antes de la apertura, después de
-  kemet-niveles y antes de kemet-entrada y kemet-riesgo.
+  ventanas sin operar (alrededor de cada dato de la agenda, la apertura y los minutos antes de estar plano),
+  el semáforo del día, los niveles de ayer y de la noche, el tamaño por operación con la regla Kemet y la hora
+  límite de la firma. Con una acción, el tamaño va en acciones enteras con el stop en dólares por acción.
+  También guarda la agenda de datos del día, a mano o desde el calendario gratuito de Forex Factory. Úsala
+  cuando el usuario diga «hazme el plan de hoy», «plan de sesión», «qué semáforo tenemos», «qué datos salen
+  hoy», «a qué hora no opero», «cuántos contratos hoy con stop de 40», «cuántas acciones de TSLA con stop de 3
+  dólares», «apunta que a las 8:30 sale el IPC», o antes de la apertura, después de kemet-niveles y antes de
+  kemet-entrada y kemet-riesgo.
 argument-hint: "plan [--mercado NQ|TSLA] [--stop PTS] [--semaforo verde|ambar|rojo] [--escribir] | agenda --fecha AAAA-MM-DD --dato \"08:30 IPC fuerte\""
 ---
 
@@ -193,7 +193,7 @@ python3 plan.py plan --stop 3.57 --ahora "2026-11-11 08:00" --offline tests/fixt
 PLAN · TSLA · mié 2026-11-11 · 14:00 Madrid / 08:00 NY
 Cuenta: Cuenta propia · 5.000 $
 Aviso: no hay kemet/agenda.json: no conozco los datos de hoy (escríbela con `plan.py agenda`)
-Semáforo: verde porque sin agenda del día, doy por hecho que no hay datos fuertes
+Semáforo: verde porque sin agenda del día doy por hecho que no hay datos fuertes; no lo sé: escríbela con plan.py agenda --auto o --dato
 Hoy no se opera en:
   09:30–09:45 NY (15:30–15:45 Madrid)        apertura: quien empieza espera
   15:50–15:55 NY (21:50–21:55 Madrid)        últimos minutos antes de estar plano

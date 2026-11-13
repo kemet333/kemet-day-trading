@@ -50,7 +50,6 @@ un error (una línea, sin traza).
 | --- | --- |
 | `https://disclosures-clerk.house.gov/public_disc/financial-pdfs/<AÑO>FD.zip` | el índice del año: un `<Member>` por declaración (nombre, distrito, tipo, fecha, DocID). El Clerk lo rehace una vez al día |
 | `https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/<AÑO>/<DocID>.pdf` | cada PTR; se guarda en `kemet/estado/ptr/<DocID>.pdf` |
-| `kemet/config.json` | `sec_user_agent` si lo hay, como identificación en las peticiones (kemet-tamano) |
 | `kemet/watchlist.json`, `kemet/portfolio.json` | los tickers que se señalan: `aciertos[].simbolo` (kemet-scanner) y `posiciones[].simbolo` (kemet-broker) |
 | `kemet/estado/congreso.json` | con `recientes --escribir`: los DocID ya enseñados (`vistos`) y `ultima_comprobacion`, para que cada PTR salga como nuevo una sola vez |
 | `kemet/congreso.json` | con `--escribir`: `generado`, `fuente`, `comando`, `anio`, `miembros`, `declaraciones[]` (las filas del índice), `nuevas[]`, `informes[]` (cada PTR leído con sus `operaciones[]`) |

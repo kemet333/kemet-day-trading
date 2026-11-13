@@ -1,16 +1,16 @@
 ---
 name: kemet-tamano
 description: >-
-  Tamaño por operación en cuentas de fondeo. Convierte tu firma y tu cuenta (76 cuentas de Topstep, Apex,
-  Tradeify, Alpha Futures y Lucid) en tu configuración con la regla Kemet: pérdida máxima del día = la menor
-  entre el límite diario de la firma y un cuarto del drawdown, riesgo por operación = un tercio de eso (tres
-  fallos y paras). Con un stop en puntos dice cuántos micros caben; con el plan de kemet-salida escribe una
-  sola orden bracket en micros. Un plan que no cabe en 0 contratos es un rechazo con motivo, no una orden más
-  pequeña. También la cuenta propia para acciones de EE. UU. o futuros sin firma: tamaño en acciones enteras
-  con sus topes y una bracket que kemet-broker puede enviar en cuenta papel tras el PASS de kemet-riesgo y tu
-  sí. Úsala cuando el usuario diga «cuántos contratos», «cuántas acciones», «qué tamaño pongo», «tengo una
-  Apex 50K», «mi stop son 18 puntos», «qué reglas tiene mi firma», o después de que kemet-salida escriba un
-  plan. Va antes de kemet-riesgo.
+  Tamaño por operación en cuentas de fondeo. Convierte tu firma y tu cuenta (Topstep, Apex, Tradeify, Alpha
+  Futures y Lucid) en tu configuración con la regla Kemet: pérdida máxima del día = la menor entre el límite
+  diario de la firma y un cuarto del drawdown, riesgo por operación = un tercio de eso (tres fallos y paras).
+  Con un stop en puntos dice cuántos micros caben; con el plan de kemet-salida escribe una sola orden bracket
+  en micros. Si no cabe, rechazo con motivo, nunca una orden más pequeña. También la cuenta propia para
+  acciones de EE. UU. o futuros sin firma: tamaño en acciones enteras con sus topes y una bracket que
+  kemet-broker puede enviar en cuenta papel tras el PASS de kemet-riesgo y tu sí. Úsala cuando el usuario diga
+  «configura mi cuenta», «cuántos micros caben», «cuántas acciones», «qué tamaño pongo», «tengo una Apex 50K»,
+  «mi stop son 18 puntos», «qué reglas tiene mi firma», o después de que kemet-salida escriba un plan. Va
+  antes de kemet-riesgo.
 argument-hint: "[--firma apex --cuenta eod-pa-50 --mercado NQ | --propia --presupuesto 5000 --max-perdida-operacion 50 --max-perdida-dia 150 --mercado TSLA] [--stop 18]"
 ---
 

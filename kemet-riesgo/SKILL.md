@@ -5,12 +5,12 @@ description: >-
   de datos del día, lo que ya has operado hoy, y da PASS o BLOCK con el motivo: stop obligatorio y del lado
   correcto, pérdida al stop dentro del riesgo por operación, suma del día dentro de la pérdida máxima, no más
   de tres operaciones, contratos dentro del tope de la cuenta, fuera de las ventanas de datos y de la
-  apertura, antes de la hora de estar plano y de la hora límite de la firma, Globex abierto, sin duplicados.
-  En acciones con la cuenta propia, además: reloj de la NYSE, tamaño, posición, efectivo con colchón, cortos y
-  opciones sin permiso. Una orden de cierre nunca se bloquea por los límites del día. Lleva la cuenta del día.
-  Úsala cuando el usuario diga «comprueba mi orden», «puedo comprar TSLA», «cuánto llevo arriesgado hoy»,
-  «apunta que he cerrado con -120», «cómo va el día», o siempre después de kemet-tamano y antes de poner nada
-  o de que kemet-broker lea el ticket.
+  apertura, antes de la hora de estar plano y de la hora límite de la firma, Globex abierto. En acciones con
+  la cuenta propia, además: reloj de la NYSE, tamaño, posición, efectivo con colchón, cortos y opciones sin
+  permiso. Una orden de cierre nunca se bloquea por los límites del día. Lleva la cuenta del día. Úsala cuando
+  el usuario diga «comprueba mi orden», «puedo entrar», «puedo comprar TSLA», «me queda margen», «cuánto llevo
+  arriesgado hoy», «apunta que he cerrado con -120», «cómo va el día», o siempre después de kemet-tamano y
+  antes de poner nada.
 argument-hint: "[check | registrar --abrir | registrar --resultado -120 | hoy]"
 ---
 

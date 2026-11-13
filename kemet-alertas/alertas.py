@@ -249,22 +249,23 @@ def precio_ultimo(codigo, ahora, offline=None, desde=None):
     ini = comun.utc_de_ts(vela[0])
     fin = ini + dt.timedelta(seconds=ch["paso"])
     cierre_ant, fecha_ant = cierre_regular_anterior(codigo, ch5, ahora)
-    # el máximo y el mínimo desde la comprobación anterior (o de la última vela): una mecha que toca el stop también cuenta
-    tramo = [b for b in comun.velas_cerradas(ch, ahora) if desde is not None and b[0] + ch["paso"] > comun.ts_de_utc(desde)] or [vela]
-    return {"simbolo": codigo, "precio": vela[4], "maximo": max(b[2] for b in tramo), "minimo": min(b[3] for b in tramo),
+    # las velas cerradas desde la última que se vio en el check anterior (`desde`, su inicio): con el retraso de Yahoo, mirar
+    # desde la hora del check perdía las que llegaban tarde. Cada regla mira después solo las posteriores a su alta.
+    tramo = [b for b in comun.velas_cerradas(ch, ahora) if desde is not None and b[0] > desde] or [vela]
+    return {"simbolo": codigo, "precio": vela[4], "tramo": [(b[0], b[2], b[3]) for b in tramo], "paso": ch["paso"], "vela_ts": vela[0],
             "hora_vela": comun.a_ny(ini).strftime("%Y-%m-%d %H:%M"),
             "cierra": comun.hhmm(comun.a_ny(fin)), "intervalo": ch["intervalo"],
             "retraso_min": max(0, int((ahora - fin).total_seconds() // 60)),
             "cierre_anterior": cierre_ant, "fecha_cierre_anterior": fecha_ant}
 
 
-def precios(codigos, ahora, offline=None, desde=None):
+def precios(codigos, ahora, offline=None, vistas=None):
     out, errores = {}, []
     for i, c in enumerate(codigos):
         try:
             if i and not offline:
                 comun._sleep(comun.PAUSE)
-            out[c] = precio_ultimo(c, ahora, offline, desde)
+            out[c] = precio_ultimo(c, ahora, offline, (vistas or {}).get(c))
         except KemetError as e:
             errores.append(str(e))
     return out, errores
@@ -407,13 +408,20 @@ def evaluar(reglas, qs, st, cfg, estado_, ahora):
         if t in ("encima", "debajo", "stop", "objetivo"):
             largo = r.get("lado", "largo") == "largo"
             arriba = t == "encima" or (t == "objetivo" and largo) or (t == "stop" and not largo)
-            alto, bajo = q.get("maximo", p), q.get("minimo", p)
-            toca = alto >= r["precio"] if arriba else bajo <= r["precio"]     # la mecha cuenta: el stop de la plataforma salta con ella
+            # la mecha cuenta (el stop de la plataforma salta con ella), pero solo la de velas posteriores al alta de la regla
+            alta = comun.de_iso(r.get("creada"))
+            velas_r = [x for x in q.get("tramo") or [] if alta and x[0] + q.get("paso", 300) > comun.ts_de_utc(alta)]
+            alto = max([p] + [x[1] for x in velas_r])
+            bajo = min([p] + [x[2] for x in velas_r])
+            toca = alto >= r["precio"] if arriba else bajo <= r["precio"]
             if toca and rid not in sonaron:
                 que = {"stop": "tu stop", "objetivo": "tu objetivo"}.get(t, "tu nivel")
-                toques.append({"id": rid, "simbolo": codigo, "mensaje": "%s último %s: en o por %s de %s %s%s."
-                               % (codigo, texto_precio(q), "encima" if arriba else "debajo", que, comun.pts(r["precio"]),
-                                  (" (" + r["nota"] + ")") if r.get("nota") else "")})
+                mecha = (alto if arriba else bajo) != p
+                toques.append({"id": rid, "simbolo": codigo, "mensaje": "%s último %s%s: %s %s %s%s."
+                               % (codigo, texto_precio(q),
+                                  (", %s %s" % ("máximo" if arriba else "mínimo", comun.pts(alto if arriba else bajo))) if mecha else "",
+                                  "una mecha llegó a" if mecha else ("en o por %s de" % ("encima" if arriba else "debajo")), que,
+                                  comun.pts(r["precio"]), (" (" + r["nota"] + ")") if r.get("nota") else "")})
                 sonaron[rid] = stamp
         elif t == "pct":
             ref = r.get("ref") or q.get("cierre_anterior")
@@ -571,11 +579,11 @@ def cmd_check(a):
             if c not in codigos:
                 codigos.append(c)
     estado_ = _leer(ruta_estado, {})
-    desde = comun.de_iso(estado_.get("ultima_comprobacion"))
-    if desde and (ahora - desde).total_seconds() > 3 * 3600:
-        desde = None                          # de otra sesión: solo la última vela
-    qs, errores = precios(codigos, ahora, a.offline, desde) if codigos else ({}, [])
+    vistas = estado_.get("velas_vistas") or {}
+    vistas = {c: ts for c, ts in vistas.items() if isinstance(ts, int) and 0 <= comun.ts_de_utc(ahora) - ts <= 3 * 3600}   # otra sesión: solo la última vela
+    qs, errores = precios(codigos, ahora, a.offline, vistas) if codigos else ({}, [])
     toques, estado_ = evaluar(reglas, qs, st, cfg, estado_, ahora)
+    estado_.setdefault("velas_vistas", {}).update({c: q["vela_ts"] for c, q in qs.items() if q.get("vela_ts")})
     if not a.sin_escribir:
         comun.escribir_json(ruta_estado, estado_)
         if qs:
@@ -610,6 +618,8 @@ def cmd_add(a):
     if a.desde_plan:
         plan = comun.leer_json(comun.dada(a.plan) or comun.ruta("plan.json"), "kemet-salida lo escribe")
         nuevas = reglas_del_plan(plan, cfg)
+        for r in nuevas:
+            r["creada"] = comun.iso(comun.parse_ahora(getattr(a, "ahora", None)))
         ids = {r["id"] for r in nuevas}
         doc["reglas"] = [r for r in doc["reglas"] if r.get("id") not in ids] + nuevas
         estado_ = _leer(ruta_estado, {})
@@ -663,6 +673,7 @@ def cmd_add(a):
             regla["nota"] = a.nota
     if a.fecha:
         regla["fecha"] = a.fecha
+    regla["creada"] = comun.iso(comun.parse_ahora(getattr(a, "ahora", None)))
     validar(regla)
     if any(r.get("id") == regla["id"] for r in doc["reglas"]):
         raise KemetError("ya hay una regla con id %s (reset %s la rearma, o da otro --id)" % (regla["id"], regla["id"]))
@@ -727,6 +738,7 @@ def main(argv=None):
     p.add_argument("--sin-escribir", dest="sin_escribir", action="store_true")
     p = sub.add_parser("add", help="añade una regla")
     archivos(p)
+    p.add_argument("--ahora", help='la hora del alta en una simulación: "2026-11-11 10:45" en hora de Nueva York (solo cuentan las velas posteriores)')
     p.add_argument("--mercado")
     p.add_argument("--simbolo", help="NQ, ES, CL, GC, el micro, o un ticker de EE. UU. (TSLA)")
     g = p.add_mutually_exclusive_group()

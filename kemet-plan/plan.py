@@ -295,7 +295,7 @@ def semaforo(cfg, datos, mercado, forzado=None):
         if datos is not None:
             razones.append("sin datos fuertes en la agenda")
         else:
-            # sin agenda no se sabe si a las 08:30 sale el IPC: ámbar hasta que la haya (plan.py agenda --auto, o --dato)
+            # sin agenda no se sabe si a las 08:30 sale el IPC: sigue en verde (decisión de Diego), pero el motivo lo dice
             razones.append("sin agenda del día doy por hecho que no hay datos fuertes; no lo sé: escríbela con plan.py agenda --auto o --dato")
     return base, razones
 
@@ -691,8 +691,11 @@ def cmd_agenda(a):
             texto = comun.leer_texto(a.offline) if a.offline else descargar_calendario()
             auto, fuera = datos_del_calendario(texto, dt.date.fromisoformat(fecha), (a.mercado or "").upper() or None)
         except KemetError as e:
-            print("Error: %s" % e, file=sys.stderr)
-            return 1
+            if not datos:
+                print("Error: %s" % e, file=sys.stderr)
+                return 1
+            print("Aviso: %s. Guardo solo los datos que has dado con --dato." % e, file=sys.stderr)
+            auto, fuera = [], []
         datos = sorted(datos + auto, key=lambda d: d["hora"])
     doc = {"fecha": fecha, "datos": datos}
     if a.auto:

@@ -132,9 +132,10 @@ def tickers_de_archivos():
         except KemetError:
             return False                      # un símbolo raro de un archivo no tumba la búsqueda de los demás
     wl = comun.leer_json("watchlist.json", obligatorio=False) or {}
+    de_acciones = str(wl.get("modo") or "") in ("diario", "orb")       # CL en un escaneo de acciones es Colgate
     for h in wl.get("aciertos") or wl.get("hits") or []:
         sym = (h.get("simbolo") or h.get("symbol") or "").upper().replace("-", ".")
-        if sym and accion(sym):
+        if sym and (accion(sym) or (de_acciones and sym in TAMBIEN_ACCION)):
             out[sym] = h.get("nombre") or h.get("name")
     pf = comun.leer_json("portfolio.json", obligatorio=False) or {}
     for p in pf.get("posiciones") or pf.get("positions") or []:

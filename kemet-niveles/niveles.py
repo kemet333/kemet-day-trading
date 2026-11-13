@@ -114,6 +114,7 @@ def calcular(codigo, ch, ahora_utc, ib_minutos=None):
     ayer = previos[-1]
     rth_ayer = comun.regular(codigo, dias[ayer], ayer)
     pdc = rth_ayer[-1][4]
+    oficial = False
     if accion:
         # El cierre oficial (la subasta de las 16:00) no viene en las velas de 5 minutos: hasta que abre la sesión siguiente,
         # el precio regular de Yahoo es ese cierre (TSLA 397,45 y no 397,62 de la vela de 15:55)
@@ -121,7 +122,10 @@ def calcular(codigo, ch, ahora_utc, ib_minutos=None):
         tm, pm = ch.get("ts_mercado"), ch.get("precio_mercado")
         if tm and pm and comun.ts_de_utc(c_ayer) <= int(tm) <= comun.ts_de_utc(c_ayer) + 3600 and ahora_utc >= c_ayer:
             pdc = float(pm)
+            oficial = True
     ultima = cerradas[-1]
+    if oficial and ultima[0] < comun.ts_de_utc(comun.sesion_regular(codigo, hoy)[0]):
+        ultima = (ultima[0], ultima[1], ultima[2], ultima[3], pdc, ultima[5])   # antes de abrir, el último precio es ese mismo cierre
     doc = {"generado": comun.iso(ahora_utc), "mercado": codigo, "instrumento": inst["tipo"], "fecha": hoy.isoformat(), "sesion_anterior": ayer.isoformat(),
            "ultimo": ultima[4], "ultimo_hora": comun.hhmm(comun.a_ny(comun.utc_de_ts(ultima[0] + ch["paso"]))),
            "pdh": max(b[2] for b in rth_ayer), "pdl": min(b[3] for b in rth_ayer), "pdc": pdc}

@@ -595,7 +595,9 @@ def notas_veredicto(mc):
         notas.append("El %s de las repeticiones no toca ni el objetivo ni el stop antes de las %s; el precio a esa hora decide esas."
                      % (pc(pn), hasta))
     media = mc.get("r_media")
-    if lv and abs(lv[0]) >= MONEDA and media is not None and media != 0 and (media > 0) != (lv[0] > 0):
+    ic = mc.get("intervalo_90")
+    indistinto = bool(lv and ic and ic[0] <= lv[2] <= ic[1])
+    if lv and not indistinto and abs(lv[0]) >= MONEDA and media is not None and media != 0 and (media > 0) != (lv[0] > 0):
         notas.append("La R media es %s de todos modos: las repeticiones que no tocan ningún lado tiran hacia el otro."
                      % signo(media, 3))
     return notas
@@ -663,7 +665,8 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
                       % (fecha_es(fecha), recortados[fecha.isoformat()], hhmm_min(z)))
     pool = construir_pool(sesiones, n)
     mc = simular(pool, plan["entrada"], plan["stop"], plan["objetivo"], k, last, repeticiones, semilla, ventana, plan["lado"] == "largo")
-    mc["intervalo_90"] = intervalo_parte(sesiones, n, plan["entrada"], plan["stop"], plan["objetivo"], k, last, semilla, ventana, plan["lado"] == "largo")
+    mc["intervalo_90"] = intervalo_parte(sesiones, n, plan["entrada"], plan["stop"], plan["objetivo"], k, last, semilla, ventana, plan["lado"] == "largo",
+                                         reps=max(200, min(REPS_REMUESTREO, repeticiones // 10)))
     mc.update(hasta=hhmm_min(a + 5 * (last + 1)), sesiones_pool=len(sesiones), pool_desde=sesiones[0][0].isoformat(),
               pool_hasta=sesiones[-1][0].isoformat(), horas_bandas=[hhmm_min(a + 5 * (j + 1)) for j in range(k, last + 1)])
     ib_dia = comun.balance_inicial(codigo, dia_plan, fecha, plan["ib_minutos"]) if dia_plan else None

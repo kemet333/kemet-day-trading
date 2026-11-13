@@ -18,6 +18,8 @@ from _load import load  # noqa: E402
 riesgo, broker, comun = tr.riesgo, tb.broker, tr.comun
 tamano = load("kemet-tamano", "tamano")
 diario = load("kemet-diario", "diario")
+alertas = load("kemet-alertas", "alertas")
+YAHOO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "yahoo")
 
 
 class Puerta(tr.Base):
@@ -247,6 +249,37 @@ class Diario(unittest.TestCase):
         ops, avisos = self.leer("fecha,hora,simbolo,lado,contratos,entrada,salida,stop\n2026-11-02,10:00,MNQ,corto,-2,28000,27990,28010\n")
         self.assertEqual(ops[0]["contratos"], 2)
         self.assertTrue(any("cantidad -2" in a for a in avisos))
+
+
+class Alertas(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="kemet-alertas-")
+        self.viejo = comun.KEMET_DIR
+        comun.KEMET_DIR = os.path.join(self.dir, "kemet")
+
+    def tearDown(self):
+        comun.KEMET_DIR = self.viejo
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def run_(self, argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = alertas.main(argv)
+        return code, out.getvalue()
+
+    def stop_puesto_a(self, hora):
+        self.run_(["add", "--simbolo", "NQ", "--encima", "99999", "--ahora", "2026-11-12 07:30"])
+        self.run_(["check", "--offline", YAHOO, "--ahora", "2026-11-12 08:05"])
+        self.run_(["add", "--simbolo", "NQ", "--stop", "28040", "--lado", "largo", "--ahora", "2026-11-12 " + hora])
+        return self.run_(["check", "--offline", YAHOO, "--ahora", "2026-11-12 09:25"])
+
+    def test_una_mecha_anterior_a_la_regla_no_hace_saltar_el_stop(self):
+        code, out = self.stop_puesto_a("09:00")
+        self.assertNotIn("ALERTA", out)
+
+    def test_una_mecha_posterior_si(self):
+        code, out = self.stop_puesto_a("08:00")
+        self.assertIn("mecha", out)
 
 
 class Velas(unittest.TestCase):

@@ -1068,7 +1068,8 @@ def ultima_sesion(ahora_utc):
     ny = comun.a_ny(ahora_utc)
     for atras in range(0, 10):
         d = ny.date() - dt.timedelta(days=atras)
-        cand = comun.de_ny(dt.datetime.combine(d, dt.time(16, 55)))
+        hora = dt.time(12, 55) if d.isoformat() in comun.CME_RECORTADO else dt.time(16, 55)   # el 27/11 o el 24/12 paran a las 13:00
+        cand = comun.de_ny(dt.datetime.combine(d, hora))
         if cand <= ahora_utc and comun.estado_globex(cand)[0] == "abierto":
             return cand
     return ahora_utc
@@ -1104,14 +1105,14 @@ def cmd_futuros(a):
     sin_datos(len(filas), len(codigos), fallidos)
     doc = documento("futuros", ahora, codigos, recuento, len(fallidos), aciertos, a,
                     datos_hasta="%s %s NY" % (hoy.isoformat(), comun.hhmm(ny)), ib_minutos=a.ib_minutos, sesiones=a.sesiones,
-                    contratos=filas, sin_datos=fallidos)
+                    contratos=filas, sin_datos=fallidos, ultima_sesion=(comun.iso(ahora) if real != ahora else None))
     ruta = guardar(a, doc)
     if a.json:
         print(json.dumps(dict(doc, recuento=recuento, segundos=round(time.time() - t0, 1)), indent=1, ensure_ascii=False))
         return 0 if aciertos else 1
     estado, motivo = comun.estado_globex(real)
     if real != ahora:
-        print("Globex %s (%s): este es el escaneo de la última sesión, hasta las %s." % (estado, motivo, comun.hora_doble(ahora)))
+        print("Globex %s (%s): este es el escaneo de la última sesión, la del %s hasta las %s." % (estado, motivo, fecha_es(comun.a_ny(ahora).date()), comun.hora_doble(ahora)))
         estado = "abierto"
     print("Futuros, %s, %s · balance inicial de %d minutos, máximo y mínimo de ayer, rango frente al medio de %d sesiones (velas de 5 minutos de Yahoo, unos 10 minutos de retraso)"
           % (fecha_es(hoy), comun.hora_doble(ahora), a.ib_minutos, a.sesiones))

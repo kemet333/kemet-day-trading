@@ -308,6 +308,7 @@ def analizar(companyfacts, trimestres=6, nombre=None):
             "presentado": base.get("presentado"), "formulario": base.get("formulario"),
         })
     corregir_split(filas)
+    cuatro_bpa = [r.get("bpa_diluido") for r in filas[:4]]
     filas = filas[:trimestres]
     ultimos = {}
     for clave in ("ingresos", "beneficio_neto", "bpa_diluido", "flujo_caja_operativo"):
@@ -316,6 +317,8 @@ def analizar(companyfacts, trimestres=6, nombre=None):
             ultimos[clave] = sum(s[clave][e]["valor"] for e in cuatro)
     if "bpa_diluido" in ultimos:
         ultimos["bpa_diluido"] = round(ultimos["bpa_diluido"], 2)
+        if len(cuatro_bpa) == 4 and None not in cuatro_bpa:
+            ultimos["bpa_diluido"] = round(sum(cuatro_bpa), 2)        # con el BPA ya corregido alrededor de un split
     return {"entidad": nombre or companyfacts.get("entityName"), "cik": str(companyfacts.get("cik", "")).zfill(10),
             "trimestres": filas, "ultimos_4": ultimos, "conceptos": conceptos}
 
@@ -428,10 +431,16 @@ def proximo_informe(submissions, informes, hoy, fp_ultimo=None):
     # Lo que mueve el precio es la nota de resultados (8-K, punto 2.02), que suele salir días o semanas antes del 10-Q/10-K:
     # se busca la del mismo trimestre del año pasado (presentada en los 75 días siguientes al cierre de ese periodo).
     equivalente = objetivo - dt.timedelta(days=365)
-    notas = [f for f in _recientes(submissions) if f["form"] == "8-K" and "2.02" in (f.get("items") or "")
-             and f["filingDate"] and 0 < (_fecha(f["filingDate"]) - equivalente).days <= 75]
+    recientes = _recientes(submissions)
+    # el 10-Q/10-K del mismo trimestre del año pasado: la nota de resultados es el último 2.02 antes de él (Tesla presenta
+    # también las entregas como 2.02 a principios de mes: el primero tras el cierre no sirve)
+    informe_eq = sorted((f for f in recientes if f["form"] in INFORMES and f["reportDate"]
+                         and abs((_fecha(f["reportDate"]) - equivalente).days) <= 12), key=lambda x: x["filingDate"])
+    tope = _fecha(informe_eq[0]["filingDate"]) if informe_eq else equivalente + dt.timedelta(days=75)
+    notas = [f for f in recientes if f["form"] == "8-K" and "2.02" in (f.get("items") or "")
+             and f["filingDate"] and equivalente < _fecha(f["filingDate"]) <= tope]
     if notas:
-        f = sorted(notas, key=lambda x: x["filingDate"])[0]
+        f = sorted(notas, key=lambda x: x["filingDate"])[-1]
         estimado = _fecha(f["filingDate"]) + dt.timedelta(weeks=52)
         return {"formulario": "la nota de resultados (8-K, punto 2.02)", "estimado": estimado.isoformat(), "dias": (estimado - hoy).days,
                 "base": "la del mismo trimestre del año pasado salió el %s; el %s llega después" % (f["filingDate"], formulario), "estimacion": True}
