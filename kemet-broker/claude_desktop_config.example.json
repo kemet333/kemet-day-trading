@@ -2,7 +2,7 @@
   "mcpServers": {
     "alpaca": {
       "command": "uvx",
-      "args": ["alpaca-mcp-server"],
+      "args": ["alpaca-mcp-server==2.4.0"],
       "env": {
         "ALPACA_API_KEY": "TU_CLAVE_PAPEL_ESCRITA_AQUI_NUNCA_EN_EL_CHAT",
         "ALPACA_SECRET_KEY": "TU_SECRETO_PAPEL_ESCRITO_AQUI_NUNCA_EN_EL_CHAT",

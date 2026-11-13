@@ -153,7 +153,7 @@ def de_ny(local):
 
 
 def utc_ahora():
-    return _dt.datetime.utcnow().replace(microsecond=0)
+    return _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None, microsecond=0)
 
 
 def utc_de_ts(ts):
@@ -503,3 +503,19 @@ def escribir_json(nombre, doc):
 
 def iso(utc):
     return utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def de_iso(texto):
+    """"2026-11-13T15:04:05Z" -> datetime UTC naive; None si no se entiende."""
+    try:
+        return _dt.datetime.strptime(str(texto), "%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        return None
+
+
+def huella_dia(doc):
+    """Huella de kemet/estado/dia.json: si cambia (otra operación, un resultado), un PASS anterior ya no vale para el bróker."""
+    import hashlib
+    ops = doc.get("operaciones") if isinstance(doc, dict) else None
+    blob = json.dumps([doc.get("fecha") if isinstance(doc, dict) else None, ops or []], sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]

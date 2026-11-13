@@ -170,7 +170,7 @@ pagar evaluaciones que no apruebes. Decide tú y, si necesitas consejo, busca a 
 **Ninguna orden sin tu sí.** Solo `/kemet-broker` puede llevar a una orden, y solo después de que `/kemet-riesgo`
 pase esa orden exacta y tú escribas sí para ese ticket en el chat. Pon la herramienta del bróker en «Necesita
 aprobación» en Claude, nunca en «Permitir siempre», para que la tarjeta de Claude sea un segundo control. Cuenta
-papel por defecto (`"papel": true`); las claves van en variables de entorno, nunca en el chat. En futuros no hay
+papel por defecto (`"papel": true`); las claves van en el archivo de configuración del conector (su bloque `env`), nunca en el chat. En futuros no hay
 conector gratuito: la operación la pones tú en tu plataforma. Kemet Capital opera con agentes, en su plataforma,
 sistemas con filtros y parámetros validados en su propio banco; eso es otro producto y no está aquí.
 

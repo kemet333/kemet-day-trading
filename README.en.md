@@ -147,7 +147,7 @@ evaluations you do not pass. Decide for yourself, and talk to a licensed profess
 **No order without your yes.** Only `/kemet-broker` can lead to an order, and only after `/kemet-riesgo` passes
 that exact order and you type yes for that ticket in the chat. Set the broker tool to "Needs approval" in Claude,
 never "Always allow", so Claude's own card is a second check. Paper account by default (`"papel": true`); keys
-live in environment variables, never in the chat. There is no free futures connector: futures orders you place
+live in the connector config file (its `env` block), never in the chat. There is no free futures connector: futures orders you place
 yourself on your platform. Kemet Capital runs, with agents on its own platform, systems whose filters and
 parameters were validated on its own bench; that is a different product and it is not here.
 
