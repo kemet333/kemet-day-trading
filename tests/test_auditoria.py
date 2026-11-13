@@ -13,7 +13,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_broker as tb  # noqa: E402
 import test_riesgo as tr  # noqa: E402
 
+from _load import load  # noqa: E402
+
 riesgo, broker, comun = tr.riesgo, tb.broker, tr.comun
+tamano = load("kemet-tamano", "tamano")
 
 
 class Puerta(tr.Base):
@@ -143,6 +146,49 @@ class Bróker(tb.Base):
             sys.stdin = viejo
         self.assertEqual(code, 0, err)
         self.assertEqual(self.leer("estado", "broker.json")["ordenes"][-1]["respuesta"], "sí")
+
+
+class Tamano(unittest.TestCase):
+    def cuenta(self, firma, cuenta):
+        f, acc = tamano.buscar(tamano.cargar_reglas(), firma, cuenta)
+        return acc
+
+    def test_apex_con_los_topes_oficiales(self):
+        topes = {c: (self.cuenta("apex", c)["max_mini"], self.cuenta("apex", c)["max_micro"]) for c in
+                 ("eod-eval-25", "eod-eval-50", "eod-eval-100", "eod-eval-150", "eod-pa-25", "eod-pa-50", "eod-pa-100", "eod-pa-150")}
+        self.assertEqual(topes, {"eod-eval-25": (4, 40), "eod-eval-50": (6, 60), "eod-eval-100": (8, 80), "eod-eval-150": (12, 120),
+                                 "eod-pa-25": (1, 10), "eod-pa-50": (2, 20), "eod-pa-100": (3, 30), "eod-pa-150": (4, 40)})
+        acc = self.cuenta("apex", "eod-pa-50")
+        r = tamano.calcular(acc["max_loss"], acc["daily_loss_limit"], acc["max_micro"], "ES", 1.5, cap_mini=acc["max_mini"])
+        self.assertEqual(r["contratos"], 20)                               # antes 22 MES con un tope de 100
+
+    def test_zn_cuenta_con_el_tope_de_minis(self):
+        acc = self.cuenta("apex", "eod-pa-50")
+        r = tamano.calcular(acc["max_loss"], acc["daily_loss_limit"], acc["max_micro"], "ZN", 0.015625, cap_mini=acc["max_mini"])
+        self.assertEqual(r["contratos"], 2)
+        self.assertNotIn("ZN", comun.MICRO_A_CODIGO)
+
+    def test_el_semaforo_baja_la_perdida_del_usuario(self):
+        verde = tamano.calcular(2000, 1000, 20, "NQ", 18, "verde", 200)
+        ambar = tamano.calcular(2000, 1000, 20, "NQ", 18, "ambar", 200)
+        self.assertEqual((verde["perdida_max_dia"], ambar["perdida_max_dia"]), (200, 100))
+        self.assertLessEqual(ambar["contratos"], verde["contratos"])
+
+    def test_stop_de_menos_de_un_tick(self):
+        with self.assertRaises(comun.KemetError):
+            tamano.calcular(2000, 1000, 20, "NQ", 0.01)
+
+    def test_contratos_y_tick(self):
+        self.assertEqual(comun.CONTRATOS["NG"]["punto_micro"], 1000.0)    # MNG: 1.000 MMBtu
+        self.assertEqual(comun.CONTRATOS["6E"]["tick"], 0.0001)            # el tick de M6E, válido también en 6E
+        self.assertEqual(comun.al_tick(112.484375, comun.CONTRATOS["ZN"]["tick"]), 112.484375)
+        self.assertEqual(comun.pts(1.11235), "1,11235")
+        self.assertEqual(comun.pts(88.239998), "88,24")
+
+    def test_cme_recortado_y_visperas(self):
+        for ny, estado in (("2026-11-26 14:00", "pausa"), ("2026-11-27 13:30", "cerrado"), ("2026-12-24 19:00", "cerrado"),
+                           ("2026-12-31 19:00", "cerrado"), ("2026-11-26 10:00", "abierto")):
+            self.assertEqual(comun.estado_globex(comun.parse_ahora(ny))[0], estado, ny)
 
 
 class Rutas(unittest.TestCase):

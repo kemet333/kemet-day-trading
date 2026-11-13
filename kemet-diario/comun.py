@@ -39,19 +39,27 @@ CONTRATOS = {
     "GC":  {"yahoo": "GC=F", "mini": "GC",  "micro": "MGC", "tick": 0.1,  "punto_mini": 100.0,  "punto_micro": 10.0,  "rth": ("08:20", "13:30"), "plano": "13:25", "nombre": "Oro"},
     "SI":  {"yahoo": "SI=F", "mini": "SI",  "micro": "SIL", "tick": 0.005, "punto_mini": 5000.0, "punto_micro": 1000.0, "rth": ("08:25", "13:25"), "plano": "13:20", "nombre": "Plata"},
     "HG":  {"yahoo": "HG=F", "mini": "HG",  "micro": "MHG", "tick": 0.0005, "punto_mini": 25000.0, "punto_micro": 2500.0, "rth": ("08:10", "13:00"), "plano": "12:55", "nombre": "Cobre"},
-    "NG":  {"yahoo": "NG=F", "mini": "NG",  "micro": "MNG", "tick": 0.001, "punto_mini": 10000.0, "punto_micro": 2500.0, "rth": ("09:00", "14:30"), "plano": "14:25", "nombre": "Gas natural"},
-    "6E":  {"yahoo": "6E=F", "mini": "6E",  "micro": "M6E", "tick": 0.00005, "punto_mini": 125000.0, "punto_micro": 12500.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Euro"},
+    "NG":  {"yahoo": "NG=F", "mini": "NG",  "micro": "MNG", "tick": 0.001, "punto_mini": 10000.0, "punto_micro": 1000.0, "rth": ("09:00", "14:30"), "plano": "14:25", "nombre": "Gas natural"},
+    "6E":  {"yahoo": "6E=F", "mini": "6E",  "micro": "M6E", "tick": 0.0001,  "punto_mini": 125000.0, "punto_micro": 12500.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Euro"},
     "ZN":  {"yahoo": "ZN=F", "mini": "ZN",  "micro": "ZN",  "tick": 0.015625, "punto_mini": 1000.0, "punto_micro": 1000.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Bono 10 años"},
     "ZB":  {"yahoo": "ZB=F", "mini": "ZB",  "micro": "ZB",  "tick": 0.03125, "punto_mini": 1000.0, "punto_micro": 1000.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Bono 30 años"},
 }
 INDICES = ("ES", "NQ", "YM", "RTY")
-MICRO_A_CODIGO = {v["micro"]: k for k, v in CONTRATOS.items()}
+# MNG son 1.000 MMBtu (1 $/tick). En 6E el tick es el del micro (0,0001): un precio a 0,0001 vale para 6E (0,00005) y M6E.
+# ZN y ZB no tienen micro: su «micro» es el propio contrato y se cuenta con el tope de minis, nunca con el de micros.
+MICRO_A_CODIGO = {v["micro"]: k for k, v in CONTRATOS.items() if v["micro"] != v["mini"]}
+
+
+def sin_micro(codigo):
+    """ZN, ZB: el contrato no tiene micro y cada unidad es un contrato entero."""
+    c = CONTRATOS.get(codigo)
+    return bool(c) and c["micro"] == c["mini"]
 
 # CME Globex (futuros de índices, energía y metales): abre el domingo a las 18:00 NY, cierra el viernes a las 17:00 NY,
 # con una pausa diaria de 17:00 a 18:00 NY. Festivos con cierre completo o sesión recortada (cmegroup.com, leído el
 # 2026-11-12; confirma siempre en el calendario de CME antes de un festivo).
 CME_CERRADO = {
-    "2026-04-03": "Viernes Santo", "2026-12-25": "Navidad",
+    "2026-01-01": "Año Nuevo", "2026-04-03": "Viernes Santo", "2026-12-25": "Navidad",
     "2027-01-01": "Año Nuevo", "2027-03-26": "Viernes Santo", "2027-12-24": "Navidad (observado)",
 }
 CME_RECORTADO = {  # cierre anticipado de la sesión regular: 13:00 NY para índices
@@ -61,6 +69,7 @@ CME_RECORTADO = {  # cierre anticipado de la sesión regular: 13:00 NY para índ
     "2027-06-18": "Juneteenth (observado)", "2027-07-05": "Independence Day (observado)", "2027-09-06": "Labor Day", "2027-11-25": "Thanksgiving", "2027-11-26": "Día después de Thanksgiving",
 }
 CALENDARIO = (2026, 2027)
+CME_CORTE_RECORTADO = _dt.time(13, 0)   # en una sesión recortada los índices paran a las 13:00 NY (algunos días a las 13:15: aquí, el corte prudente)
 
 # NYSE (acciones): cerrada y sesión recortada a las 13:00 NY (nyse.com/markets/hours-calendars, leído el 2026-10-13).
 NYSE_CERRADO = {
@@ -216,6 +225,11 @@ def estado_globex(utc):
         return ("abierto", "sesión del domingo noche") if t >= _dt.time(18, 0) else ("cerrado", "domingo, abre a las 18:00 NY")
     if wd == 4 and t >= _dt.time(17, 0):
         return "cerrado", "viernes, cierre semanal a las 17:00 NY"
+    manana = (d + _dt.timedelta(days=1)).isoformat()
+    if manana in CME_CERRADO and t >= _dt.time(17, 0):
+        return "cerrado", "víspera de %s: no hay sesión esta noche" % CME_CERRADO[manana]
+    if clave in CME_RECORTADO and CME_CORTE_RECORTADO <= t < _dt.time(18, 0):
+        return ("cerrado" if wd == 4 else "pausa"), "sesión recortada (%s): para a las %s NY" % (CME_RECORTADO[clave], CME_CORTE_RECORTADO.strftime("%H:%M"))
     if _dt.time(17, 0) <= t < _dt.time(18, 0):
         return "pausa", "pausa diaria 17:00–18:00 NY"
     return "abierto", "sesión recortada: " + CME_RECORTADO[clave] if clave in CME_RECORTADO else "sesión normal"
@@ -445,7 +459,7 @@ def mediana(xs):
 
 
 def al_tick(x, tick):
-    return round(round(x / tick) * tick, 4)
+    return round(round(x / tick) * tick, 8)
 
 
 # ---------------------------------------------------------------- formato español
@@ -457,9 +471,14 @@ def num(x, d=2):
 
 
 def pts(x):
-    """Puntos: sin decimales inútiles (12,00 → 12; 12,25 → 12,25)."""
-    s = num(x, 2)
-    return s[:-3] if s.endswith(",00") else s
+    """Puntos: sin decimales inútiles (12,00 → 12; 12,25 → 12,25) y, por debajo de 10, los que haga falta (6E 1,11235)."""
+    d = 2
+    while abs(x) < 10 and d < 5 and abs(round(x, d) - x) > 2e-5:   # 6E, HG, NG: los decimales del tick; 2e-5 absorbe el ruido de float32 de Yahoo
+        d += 1
+    s = num(x, d)
+    if d == 2 and s.endswith(",00"):
+        return s[:-3]
+    return s
 
 
 def usd(x, d=0):

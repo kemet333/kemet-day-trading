@@ -122,7 +122,8 @@ hay un error.
 
 ## Ejemplo: NQ, miércoles 11 de noviembre de 2026
 
-Apex 50K EOD financiada (`--firma apex --cuenta eod-pa-50`): drawdown 2.000 $, límite diario 1.000 $.
+Apex 50K EOD financiada (`--firma apex --cuenta eod-pa-50`): drawdown 2.000 $, límite diario 1.000 $ y 2 minis
+(20 micros) en el nivel 1 de escalado de la PA; Apex los sube con el saldo, así que mira tu nivel en el panel.
 
 ```
 $ python3 tamano.py config --firma apex --cuenta eod-pa-50 --mercado NQ
@@ -130,7 +131,7 @@ Config escrita en kemet/config.json
 Cuenta: Apex Trader Funding · 50K EOD fondeada (PA) (financiada) · mercado NQ
 Drawdown 2.000 $ (eod_trailing) · límite diario de la firma 1.000 $
 Pérdida máxima del día (verde): 500 $ · riesgo por operación: 166,67 $ (tres fallos y paras)
-Tope de contratos: 100 micros · 10 minis
+Tope de contratos: 20 micros · 2 minis
 Hora límite de la firma: 16:59 America/New_York · plano a las 15:55 NY · sin entradas antes de 09:45 ni después de 15:00 NY
 ```
 
@@ -159,7 +160,7 @@ Cuenta: Apex Trader Funding · 50K EOD fondeada (PA) · pérdida máxima del dí
 
 Límites (micros enteros; manda el menor):
   riesgo por operación   166,67 $ / 234,50 $ por micro                                       0 MNQ  <- manda
-  tope de la cuenta      100 micros en Apex Trader Funding · 50K EOD fondeada (PA)         100 MNQ
+  tope de la cuenta      20 micros en Apex Trader Funding · 50K EOD fondeada (PA)           20 MNQ
   lo que queda del día   500 $ menos 0 $ abierto y 0 $ perdido = 500 $ / 234,50 $            2 MNQ
 
 Sin orden: un MNQ arriesga 234,50 $ al stop (117,25 puntos × 2 $/pt), más que tu riesgo por operación de 166,67 $. Déjala pasar o planifica un stop más corto con kemet-salida
@@ -175,7 +176,7 @@ largo NQ a 28.429,75 (10:45) · stop 28.312,50 · objetivo 28.547 · riesgo 117,
 
 Límites (micros enteros; manda el menor):
   riesgo por operación   333,33 $ / 234,50 $ por micro                                       1 MNQ  <- manda
-  tope de la cuenta      170 micros en Apex Trader Funding · 150K EOD fondeada (PA)        170 MNQ
+  tope de la cuenta      40 micros en Apex Trader Funding · 150K EOD fondeada (PA)          40 MNQ
   lo que queda del día   1.000 $ menos 0 $ abierto y 0 $ perdido = 1.000 $ / 234,50 $        4 MNQ
 
 Tamaño: 1 MNQ. Pérdida al stop: 1 × 234,50 $ = 234,50 $.

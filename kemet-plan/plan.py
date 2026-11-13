@@ -263,12 +263,18 @@ def semaforo(cfg, datos, mercado, forzado=None):
     return base, razones
 
 
-def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3):
-    """La regla Kemet, la misma de tamano.py: cuarto del drawdown o límite diario (el menor), mitad en ámbar/rojo, entre 3."""
+def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3, propia_dia=None, max_mini=None):
+    """La regla Kemet, la misma de tamano.py: cuarto del drawdown o límite diario (el menor), mitad en ámbar/rojo, entre 3.
+    `propia_dia` es la pérdida del día que fijó el usuario con tamano.py config --perdida-dia (en verde): manda sobre la regla."""
     c = comun.CONTRATOS[mercado]
     cuarto = round(drawdown * 0.25)
     base = min(diario, cuarto) if diario else cuarto
-    perdida = round(base * (1.0 if semaforo_ == "verde" else 0.5))
+    if propia_dia:
+        base = propia_dia
+    factor = 1.0 if semaforo_ == "verde" else 0.5
+    perdida = round(base * factor, 2) if propia_dia else round(base * factor)
+    if comun.sin_micro(mercado):
+        max_micro = max_mini
     riesgo = perdida / float(fallos)
     out = {"micro": c["micro"], "perdida_max_dia": perdida, "riesgo_por_operacion": round(riesgo, 2), "cuarto_drawdown": cuarto,
            "limite_diario_firma": diario, "fallos_y_paras": fallos, "max_micro": max_micro}
@@ -406,6 +412,19 @@ def construir(a):
                       % (mercado, "la config es de una cuenta de firma (futuros)" if cfg.get("firma") else "no hay cuenta propia configurada"))
     plano_a = cfg.get("plano_a") or c["plano"]
     comun.parse_hhmm(plano_a, "plano_a")
+    # festivos y sesiones recortadas: el plan no puede decir «hasta las 15:00» el día que CME para a las 13:00
+    clave = fecha.isoformat()
+    cerrados, recortados = (comun.NYSE_CERRADO, comun.NYSE_RECORTADO) if accion else (comun.CME_CERRADO, comun.CME_RECORTADO)
+    if clave in cerrados:
+        avisos.append("%s está cerrado el %s (%s): no hay sesión que planificar" % ("La NYSE" if accion else "CME", clave, cerrados[clave]))
+    elif clave in recortados:
+        corte = comun.CME_CORTE_RECORTADO.strftime("%H:%M")
+        plano_rec = "12:55"
+        cfg = dict(cfg, sin_entradas_despues=min(cfg.get("sin_entradas_despues") or "12:30", "12:30"))
+        plano_a = min(plano_a, plano_rec)
+        avisos.append("sesión recortada (%s): %s para a las %s NY. Plano a las %s y sin entradas nuevas después de las 12:30 NY%s"
+                      % (recortados[clave], "la NYSE" if accion else "CME", corte, plano_a,
+                         "" if accion or mercado in comun.INDICES else "; en %s confirma su horario de hoy en cmegroup.com" % mercado))
     zona = cfg.get("zona_usuario") or "Europe/Madrid"
     datos, aviso_agenda = agenda(fecha)
     if aviso_agenda:
@@ -423,7 +442,11 @@ def construir(a):
     elif accion:
         aviso_tam = "sin cuenta propia no hay tamaño en acciones: tamano.py config --propia --presupuesto … --max-perdida-operacion … --max-perdida-dia …"
     elif drawdown:
-        tam = tamano(mercado, sem, a.stop, float(drawdown), float(diario) if diario else None, cfg.get("max_micro"), int(cfg.get("fallos_y_paras") or 3))
+        propia_dia = None
+        if cfg.get("perdida_max_dia_origen") == "usuario" and cfg.get("perdida_max_dia"):
+            propia_dia = float(cfg["perdida_max_dia"]) * (2.0 if (cfg.get("semaforo") or "verde") != "verde" else 1.0)
+        tam = tamano(mercado, sem, a.stop, float(drawdown), float(diario) if diario else None, cfg.get("max_micro"), int(cfg.get("fallos_y_paras") or 3),
+                     propia_dia, cfg.get("max_mini"))
         if not a.stop:
             aviso_tam = "dime tu stop en puntos (--stop) y te digo cuántos %s caben" % c["micro"]
     elif a.stop:
