@@ -427,7 +427,7 @@ def cargar_plan(a, ahora):
                  "plano_a": a.hasta, "regla_stop": a.regla_stop, "regla_objetivo": a.regla_objetivo}
         origen = "flags"
     else:
-        p = a.plan or comun.ruta("plan.json")
+        p = comun.dada(a.plan) or comun.ruta("plan.json")
         crudo = comun.leer_json(p, "pásalo por kemet-salida primero, o da --mercado --fecha --lado --entrada --stop --objetivo --hora-entrada")
         if not isinstance(crudo, dict):
             raise KemetError("%s no es un plan" % p)
@@ -774,7 +774,7 @@ def cmd_run(a):
 
 def cmd_chart(a):
     if a.desde is not None:
-        p = a.desde or comun.ruta("maquina.json")
+        p = comun.dada(a.desde) or comun.ruta("maquina.json")
         doc = comun.leer_json(p, "ejecuta antes maquina.py run --escribir")
         try:
             doc["mc"]["bandas"]

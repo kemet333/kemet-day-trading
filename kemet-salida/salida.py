@@ -325,7 +325,7 @@ def reunir(a, cfg):
     """Los hechos de la entrada: de kemet/entrada.json o de los flags. Devuelve (codigo, info)."""
     doc = None
     manual = a.entrada is not None
-    ruta_in = a.de or comun.ruta("entrada.json")
+    ruta_in = comun.dada(a.de) or comun.ruta("entrada.json")
     if not manual or a.lado is None or a.ib_alto is None or a.ib_bajo is None:
         doc = leer_json(ruta_in, "ejecuta antes kemet-entrada (entrada.py check --escribir) o da --entrada, --lado, --ib-alto y --ib-bajo",
                         obligatorio=not manual)

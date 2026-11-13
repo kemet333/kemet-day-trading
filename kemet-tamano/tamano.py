@@ -906,7 +906,7 @@ def cmd_orden(a):
     cfg, existe = cargar_config()
     if not existe:
         raise KemetError("sin kemet/config.json no sé tu pérdida máxima del día: ejecuta tamano.py config")
-    plan = comun.leer_json(a.plan or "plan.json", "ejecuta kemet-salida primero")
+    plan = comun.leer_json(comun.dada(a.plan) or "plan.json", "ejecuta kemet-salida primero")
     dia = comun.leer_json(comun.ruta(os.path.join("estado", "dia.json")), obligatorio=False)
     broker = comun.leer_json(comun.ruta(os.path.join("estado", "broker.json")), obligatorio=False)
     precios = comun.leer_json(comun.ruta("precios.json"), obligatorio=False)

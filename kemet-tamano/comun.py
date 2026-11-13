@@ -21,7 +21,7 @@ import time
 import urllib.error
 import urllib.request
 
-UA = "Mozilla/5.0 (compatible; kemet-day-trading/1.0; +https://kemet-capital.com/skill)"
+UA = "Mozilla/5.0 (compatible; kemet-day-trading/2.0; +https://www.kemet-capital.com/skill/)"
 PAUSE = 0.5       # segundos entre peticiones al endpoint gratuito
 BACKOFF = 5.0     # segundos antes del único reintento tras un HTTP 429
 HOSTS = ("query2", "query1")
@@ -472,8 +472,15 @@ def ruta(nombre):
     return os.path.join(KEMET_DIR, nombre)
 
 
+def dada(path):
+    """Una ruta que da el usuario en la línea de comandos (--plan, --orden…): relativa al directorio de trabajo."""
+    return os.path.abspath(path) if path else path
+
+
 def leer_json(nombre, que=None, obligatorio=True):
-    p = nombre if os.sep in nombre or nombre.endswith(".json") and os.path.exists(nombre) else ruta(nombre)
+    # Un nombre suelto («config.json») es siempre kemet/<nombre>; solo una ruta con carpeta (o la de dada()) se lee tal cual.
+    # Antes, un config.json o agenda.json cualquiera del directorio de trabajo tapaba en silencio al de kemet/.
+    p = nombre if (os.sep in nombre or (os.altsep and os.altsep in nombre) or os.path.isabs(nombre)) else ruta(nombre)
     if not os.path.exists(p):
         if obligatorio:
             raise KemetError("falta %s%s" % (p, (": " + que) if que else ""))

@@ -518,7 +518,7 @@ def cmd_quote(a):
         codigos = [codigo_de(_mercado(a, cfg))]
     ahora = comun.parse_ahora(a.ahora)
     qs, errores = precios(codigos, ahora, a.offline)
-    ruta = a.precios or comun.ruta("precios.json")
+    ruta = comun.dada(a.precios) or comun.ruta("precios.json")
     if a.escribir and qs:
         escribir_precios(ruta, qs, ahora)
     if a.json:
@@ -547,8 +547,8 @@ def cmd_quote(a):
 
 def cmd_check(a):
     cfg = _config()
-    ruta_reglas = a.reglas or comun.ruta("alertas.json")
-    ruta_estado = a.estado or comun.ruta(os.path.join("estado", "alertas.json"))
+    ruta_reglas = comun.dada(a.reglas) or comun.ruta("alertas.json")
+    ruta_estado = comun.dada(a.estado) or comun.ruta(os.path.join("estado", "alertas.json"))
     doc = _leer(ruta_reglas, None)
     if not doc or not doc.get("reglas"):
         raise KemetError("no hay reglas en %s: añade alguna con alertas.py add --desde-plan" % ruta_reglas)
@@ -569,7 +569,7 @@ def cmd_check(a):
     if not a.sin_escribir:
         comun.escribir_json(ruta_estado, estado_)
         if qs:
-            escribir_precios(a.precios or comun.ruta("precios.json"), qs, ahora)
+            escribir_precios(comun.dada(a.precios) or comun.ruta("precios.json"), qs, ahora)
     if a.json:
         print(json.dumps({"reloj": st, "sonaron": toques, "errores": errores,
                           "precios": {c: q["precio"] for c, q in qs.items()}}, indent=2, ensure_ascii=False))
@@ -593,12 +593,12 @@ def cmd_check(a):
 
 def cmd_add(a):
     cfg = _config()
-    ruta_reglas = a.reglas or comun.ruta("alertas.json")
-    ruta_estado = a.estado or comun.ruta(os.path.join("estado", "alertas.json"))
+    ruta_reglas = comun.dada(a.reglas) or comun.ruta("alertas.json")
+    ruta_estado = comun.dada(a.estado) or comun.ruta(os.path.join("estado", "alertas.json"))
     doc = _leer(ruta_reglas, {"reglas": []})
     doc.setdefault("reglas", [])
     if a.desde_plan:
-        plan = comun.leer_json(a.plan or comun.ruta("plan.json"), "kemet-salida lo escribe")
+        plan = comun.leer_json(comun.dada(a.plan) or comun.ruta("plan.json"), "kemet-salida lo escribe")
         nuevas = reglas_del_plan(plan, cfg)
         ids = {r["id"] for r in nuevas}
         doc["reglas"] = [r for r in doc["reglas"] if r.get("id") not in ids] + nuevas
@@ -678,7 +678,7 @@ def cmd_list(a):
 
 
 def cmd_reset(a):
-    ruta_estado = a.estado or comun.ruta(os.path.join("estado", "alertas.json"))
+    ruta_estado = comun.dada(a.estado) or comun.ruta(os.path.join("estado", "alertas.json"))
     estado_ = _leer(ruta_estado, {})
     if a.id not in (estado_.get("sonaron") or {}):
         print("%s no ha sonado (nada que rearmar)." % a.id)

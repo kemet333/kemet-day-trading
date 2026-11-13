@@ -632,7 +632,7 @@ def informe(res):
 def cmd_check(a):
     ahora = comun.parse_ahora(a.ahora)
     fecha = comun.a_ny(ahora).date().isoformat()
-    doc = comun.leer_json(a.orden or "orden.json", "ejecuta tamano.py orden --escribir")
+    doc = comun.leer_json(comun.dada(a.orden) or "orden.json", "ejecuta tamano.py orden --escribir")
     ordenes = doc.get("ordenes") if isinstance(doc, dict) else doc
     if not isinstance(ordenes, list) or not ordenes:
         raise KemetError("no hay órdenes en %s" % (a.orden or comun.ruta("orden.json")))

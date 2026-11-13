@@ -50,7 +50,7 @@ cp -r kemet-day-trading/kemet-* ~/.claude/skills/
 ```
 
 Para un solo proyecto, las mismas carpetas en `.claude/skills/` de tu repo. En Claude.ai o la app de Claude:
-descarga el zip de [kemet-capital.com/skill](https://kemet-capital.com/skill) y súbelo en Ajustes, Capacidades,
+descarga el zip de [kemet-capital.com/skill](https://www.kemet-capital.com/skill/) y súbelo en Ajustes, Capacidades,
 Skills: es el pack entero como una sola skill. Sin Claude Code ni skills, pega cualquier `SKILL.md` al principio
 de un chat y funciona como método; pierdes las herramientas de Python, no las reglas.
 

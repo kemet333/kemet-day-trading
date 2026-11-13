@@ -512,7 +512,7 @@ def _reloj(a):
 
 
 def _ordenes(a):
-    doc = comun.leer_json(getattr(a, "orden", None) or "orden.json", "ejecuta tamano.py orden --escribir, o broker.py plano")
+    doc = comun.leer_json(comun.dada(getattr(a, "orden", None)) or "orden.json", "ejecuta tamano.py orden --escribir, o broker.py plano")
     ordenes = doc.get("ordenes") if isinstance(doc, dict) else doc
     if not isinstance(ordenes, list) or not ordenes:
         raise KemetError("no hay órdenes en %s" % (getattr(a, "orden", None) or comun.ruta("orden.json")))

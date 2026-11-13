@@ -622,7 +622,7 @@ def linea_watchlist(res):
 
 def cmd_watchlist(a):
     cfg = leer_config()
-    ruta_w = a.watchlist or comun.ruta("watchlist.json")
+    ruta_w = comun.dada(a.watchlist) or comun.ruta("watchlist.json")
     doc = leer_json(ruta_w, obligatorio=False)
     aciertos = (doc or {}).get("aciertos") if isinstance(doc, dict) else None
     if not doc:

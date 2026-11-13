@@ -1,11 +1,42 @@
 {
   "name": "kemet-day-trading",
   "description": "Dieciséis skills que convierten a Claude en tu equipo de trading, para acciones de EE. UU. y futuros: scanner, noticias, niveles, plan, la ruptura del rango vela a vela, stop y objetivo, una máquina del tiempo que repite el día 10.000 veces, tamaño y riesgo con tus reglas o las de tu prop firm, bróker en papel solo con tu sí, alertas, diario, resultados, Congreso y geometría de riesgo.",
-  "version": "1.0.0",
-  "author": { "name": "Kemet Capital", "url": "https://kemet-capital.com" },
-  "homepage": "https://kemet-capital.com/skill",
+  "version": "2.0.0",
+  "author": {
+    "name": "Kemet Capital",
+    "url": "https://kemet-capital.com"
+  },
+  "homepage": "https://www.kemet-capital.com/skill/",
   "repository": "https://github.com/kemet333/kemet-day-trading",
   "license": "MIT",
-  "keywords": ["claude-code", "claude-skills", "day-trading", "futures", "prop-firms", "topstep", "apex", "nq", "es", "backtesting"],
-  "skills": "./"
+  "keywords": [
+    "claude-code",
+    "claude-skills",
+    "day-trading",
+    "futures",
+    "prop-firms",
+    "topstep",
+    "apex",
+    "nq",
+    "es",
+    "backtesting"
+  ],
+  "skills": [
+    "./kemet-alertas",
+    "./kemet-broker",
+    "./kemet-congreso",
+    "./kemet-desk",
+    "./kemet-diario",
+    "./kemet-entrada",
+    "./kemet-geometria",
+    "./kemet-maquina",
+    "./kemet-niveles",
+    "./kemet-noticias",
+    "./kemet-plan",
+    "./kemet-resultados",
+    "./kemet-riesgo",
+    "./kemet-salida",
+    "./kemet-scanner",
+    "./kemet-tamano"
+  ]
 }
