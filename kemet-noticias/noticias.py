@@ -33,6 +33,7 @@ import argparse
 import datetime as dt
 import email.utils
 import gzip
+import http.client
 import hashlib
 import json
 import os
@@ -49,6 +50,8 @@ from comun import KemetError
 YAHOO_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
 SEC_FEED = ("https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=%s&type=%s"
             "&dateb=&owner=include&count=%d&output=atom")
+TAMBIEN_ACCION = {"CL", "ES", "HG", "NG", "SIL"}   # códigos de futuro que también son acciones o ETF: Colgate, Eversource, Hamilton, NovaGold, Global X Silver Miners
+CIK_DIAS = 7                 # la lista de tickers de la SEC se renueva cada semana
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 MARCADORES = ("correo@ejemplo.com", "you@example.com")
 GUARDAR_DIAS = 30
@@ -123,15 +126,20 @@ def parse_tiempo(valor):
 def tickers_de_archivos():
     """{ticker: nombre o None}: los aciertos del scanner (solo acciones) y las posiciones de kemet/portfolio.json."""
     out = {}
+    def accion(sym):
+        try:
+            return comun.es_accion(sym)
+        except KemetError:
+            return False                      # un símbolo raro de un archivo no tumba la búsqueda de los demás
     wl = comun.leer_json("watchlist.json", obligatorio=False) or {}
     for h in wl.get("aciertos") or wl.get("hits") or []:
-        sym = (h.get("simbolo") or h.get("symbol") or "").upper()
-        if sym and comun.es_accion(sym):
+        sym = (h.get("simbolo") or h.get("symbol") or "").upper().replace("-", ".")
+        if sym and accion(sym):
             out[sym] = h.get("nombre") or h.get("name")
     pf = comun.leer_json("portfolio.json", obligatorio=False) or {}
     for p in pf.get("posiciones") or pf.get("positions") or []:
-        sym = (p.get("simbolo") or p.get("symbol") or p.get("ticker") or "").upper()
-        if sym and comun.es_accion(sym):
+        sym = (p.get("simbolo") or p.get("symbol") or p.get("ticker") or "").upper().replace("-", ".")
+        if sym and accion(sym) and str(p.get("instrumento") or "") != "futuro":
             out[sym] = p.get("nombre") or out.get(sym)
     return out
 
@@ -181,6 +189,8 @@ class Descarga(object):
             raise KemetError("HTTP %s en %s" % (e.code, url))
         except urllib.error.URLError as e:
             raise KemetError("no se pudo llegar a %s: %s" % (url, e.reason))
+        except (http.client.HTTPException, OSError) as e:      # conexión cortada, respuesta a medias, timeout
+            raise KemetError("la conexión falló en %s: %s" % (url, e.__class__.__name__))
 
 
 def simbolo_yahoo(ticker):
@@ -190,11 +200,14 @@ def simbolo_yahoo(ticker):
 def mapa_cik(descarga, estado):
     """ticker a CIK de 10 dígitos, del company_tickers.json de la SEC (guardado en el estado)."""
     cache = estado.setdefault("ciks", {})
-    if cache:
+    fecha = comun.de_iso(estado.get("ciks_leidos"))
+    if cache and fecha and (comun.utc_ahora() - fecha).days < CIK_DIAS:
         return cache
     datos = json.loads(descarga.get(TICKERS_URL, "company_tickers.json", sec=True).decode("utf-8"))
+    cache.clear()                             # una salida a bolsa o un cambio de ticker entran al renovarla (cada CIK_DIAS días)
     for v in datos.values():
         cache.setdefault(v["ticker"].upper().replace("-", "."), str(v["cik_str"]).zfill(10))
+    estado["ciks_leidos"] = comun.iso(comun.utc_ahora())
     return cache
 
 
@@ -281,7 +294,8 @@ def movimientos(descarga, tickers, errores=None):
     for t in sorted(tickers):
         nombre = "chart-%s.json" % t
         try:
-            datos = descarga.get("https://query2.finance.yahoo.com" + comun.chart_path(t, "1d", "5m"), nombre)
+            ruta = ("/v8/finance/chart/%s?range=1d&interval=5m" % simbolo_yahoo(t)) if t in TAMBIEN_ACCION else comun.chart_path(t, "1d", "5m")
+            datos = descarga.get("https://query2.finance.yahoo.com" + ruta, nombre)   # CL es la acción de Colgate, no el crudo
             out.append(parse_chart(datos, t))
         except KemetError as e:
             if not (descarga.offline and "no hay archivo" in str(e)):
@@ -463,7 +477,10 @@ def render(items, errores, ahora, tickers, horas, movs=None, agenda=None, pct=MO
     out = ["Noticias de %s, %s, %s · últimas %s horas, titulares de Yahoo Finance, 8-K de EDGAR y movimiento de hoy"
            % (", ".join(sorted(tickers)) if tickers else "la agenda", fecha_es(t.date()), comun.hora_doble(ahora), comun.num(horas, 0) if horas == int(horas) else comun.num(horas, 1))]
     if movs:
-        out.append("Movimiento de hoy frente al cierre de ayer:")
+        abierto = comun.estado_nyse(ahora)[0] == "abierto"
+        recientes = [m for m in movs if m.get("hora") and ny(m["hora"]).date() == t.date()]
+        out.append("Movimiento de hoy frente al cierre de ayer:" if abierto or recientes else
+                   "La bolsa aún no ha abierto hoy: esto es el movimiento de la última sesión, no el de hoy (sin datos de premercado):")
         out += lineas_movimientos(movs, pct)
     if agenda:
         out += lineas_agenda(agenda)
@@ -521,14 +538,18 @@ def main(argv=None):
 
 def correr(a):
     ahora = comun.parse_ahora(a.ahora)
-    pedidos = []
+    pedidos, avisos_tickers = [], []
     for x in a.tickers or []:
         pedidos += [s for s in re.split(r"[,\s]+", x.upper()) if s]
     conocidos = tickers_de_archivos()
     if pedidos:
         tickers = {}
         for t in pedidos:
-            if not comun.es_accion(t):
+            t = t.replace("-", ".")
+            if t in TAMBIEN_ACCION:
+                # CL es Colgate, ES Eversource, HG Hamilton: aquí se pide por ticker, así que es la acción
+                avisos_tickers.append("%s también es un futuro; busco las noticias de la acción %s (los futuros no tienen titulares por ticker: mira la agenda)" % (t, t))
+            elif not comun.es_accion(t):
                 raise KemetError("%s no es un ticker de acciones de EE. UU.; los futuros no tienen titulares por ticker, mira la agenda y kemet-niveles" % t)
             tickers[t] = conocidos.get(t)
     else:
@@ -537,7 +558,7 @@ def correr(a):
     if not tickers and not agenda:
         raise KemetError("sin tickers: pasa --tickers TSLA,AAPL o lanza kemet-scanner antes (escribe kemet/watchlist.json)")
     estado = (comun.leer_json(comun.ruta(ESTADO), obligatorio=False) if not a.sin_estado else None) or {}
-    errores = []
+    errores = list(avisos_tickers)
     if aviso_agenda:
         errores.append(aviso_agenda)
     ua = sec_user_agent(a.user_agent)
@@ -564,9 +585,16 @@ def correr(a):
         if a.escribir:
             print("Escrito %s." % doc["escrito"])
     if not a.sin_estado:
-        recordar(items, estado, ahora)
+        recordar(mostrados, estado, ahora)        # solo lo enseñado: lo que quedó fuera de la ventana sigue siendo nuevo
         comun.escribir_json(comun.ruta(ESTADO), estado)
+    if tickers and not items and not movs and errores and all(_es_fallo_de_red(e) for e in errores if e not in avisos_tickers and e != aviso_agenda):
+        print("Sin conexión con las fuentes: lo de arriba no significa «no hay noticias». Repite en unos minutos.", file=sys.stderr)
+        return 2
     return 0 if any(i["nuevo"] for i in mostrados) or (not tickers and agenda) else 1
+
+
+def _es_fallo_de_red(texto):
+    return any(x in texto for x in ("no se pudo llegar", "la conexión falló", "HTTP 5", "HTTP 429"))
 
 
 if __name__ == "__main__":

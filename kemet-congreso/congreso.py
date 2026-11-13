@@ -71,7 +71,8 @@ def user_agent():
 
 
 def descargar(url, timeout=60):
-    req = urllib.request.Request(url, headers={"User-Agent": user_agent()})
+    # La Cámara no pide contacto: el nombre y el correo del User-Agent de la SEC se quedan para la SEC
+    req = urllib.request.Request(url, headers={"User-Agent": comun.UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
