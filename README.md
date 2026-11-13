@@ -1,5 +1,7 @@
 # Kemet Day Trading
 
+*English version: [README.en.md](README.en.md).*
+
 Dieciséis skills que convierten a Claude en tu equipo de trading: escanea miles de gráficos, vigila noticias y
 filings, lee resultados, sigue las operaciones del Congreso, marca los niveles de la sesión, escribe el plan, vigila
 la ruptura del rango vela a vela, pone el stop y el objetivo antes de entrar, repite el resto del día 10.000 veces
