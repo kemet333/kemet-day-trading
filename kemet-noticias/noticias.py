@@ -428,10 +428,11 @@ def agenda_de_hoy(ahora, mercados=None):
 def lineas_agenda(datos):
     out = ["Agenda macro de hoy (kemet/agenda.json), hora de Nueva York:"]
     for d in datos:
+        margen = 20 if d["fuerte"] else 10
         if d["pasado"]:
             cuando = "pasado"
-        elif d["minutos"] <= 0:
-            cuando = "ahora, dentro de la ventana"
+        elif d["minutos"] <= margen:
+            cuando = "ahora, dentro de la ventana" + (" (el dato sale dentro de %d min)" % d["minutos"] if d["minutos"] > 0 else "")
         elif d["minutos"] < 60:
             cuando = "dentro de %d min" % d["minutos"]
         else:

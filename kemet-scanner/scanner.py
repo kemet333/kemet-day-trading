@@ -842,6 +842,16 @@ def config_sin_entradas_despues():
     return cfg.get("sin_entradas_despues") or "15:00"
 
 
+def sin_datos(recibidos, total, fallidos=None):
+    """Si Yahoo no ha devuelto nada, error (código 2) y kemet/watchlist.json se queda como estaba: «0 aciertos» por una caída
+    de Yahoo se leía como «no hay nada»."""
+    if total and not recibidos:
+        motivo = ""
+        if isinstance(fallidos, dict) and fallidos:
+            motivo = ": %s" % sorted(set(fallidos.values()))[0][:120]
+        raise KemetError("Yahoo no ha devuelto datos de ninguno de los %d símbolos%s. No toco kemet/watchlist.json; repite en unos minutos" % (total, motivo))
+
+
 def documento(modo, ahora_utc, simbolos, recuento, fallidos, aciertos, a, **extra):
     doc = {"modo": modo, "generado": comun.iso(ahora_utc), "universo": len(simbolos), "escaneados": recuento.get("escaneados", 0),
            "fallidos": fallidos, "fuente": "yahoo", "nota": NOTA}
@@ -923,6 +933,7 @@ def cmd_diario(a):
         datos, fallidos = bajar_spark(simbolos, "3mo", "1d", a.pausa, a)
     aciertos, recuento, ultima = escanear_diario(datos, simbolos, ahora, a.min_precio, a.min_volumen)
     nfallidos = len(simbolos) - recuento["recibidos"]
+    sin_datos(recuento["recibidos"], len(simbolos), fallidos)
     doc = documento("diario", ahora, simbolos, recuento, nfallidos, aciertos, a,
                     datos_hasta=("cierre del %s" % ultima.isoformat()) if ultima else None,
                     filtros={"min_precio": a.min_precio, "min_volumen": a.min_volumen})
@@ -1003,6 +1014,7 @@ def cmd_orb(a):
     fallidos = dict(fallidos or {})
     fallidos.update(fallidos2)
     nfallidos = len([s for s in simbolos if s in fallidos])
+    sin_datos(recuento["recibidos"], len(simbolos), fallidos)
     doc = documento("orb", ahora, simbolos, recuento, nfallidos, aciertos, a,
                     datos_hasta="%s %s NY" % (dia.isoformat(), comun.hhmm(corte)), sin_confirmar=recuento["sin_confirmar"],
                     rango_minutos=a.rango_minutos, intervalo="%dm" % VELA_MIN,
@@ -1063,6 +1075,7 @@ def cmd_futuros(a):
                 "aciertos": len(aciertos)}
     ny = comun.a_ny(ahora)
     hoy = comun.dia_negociacion(ny)
+    sin_datos(len(filas), len(codigos), fallidos)
     doc = documento("futuros", ahora, codigos, recuento, len(fallidos), aciertos, a,
                     datos_hasta="%s %s NY" % (hoy.isoformat(), comun.hhmm(ny)), ib_minutos=a.ib_minutos, sesiones=a.sesiones,
                     contratos=filas, sin_datos=fallidos)

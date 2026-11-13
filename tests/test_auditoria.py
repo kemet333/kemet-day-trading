@@ -236,6 +236,17 @@ class Velas(unittest.TestCase):
                          ["10:30", "10:35", "10:40"])                                       # la de 10:45 aún se está formando
 
 
+class Empaquetado(unittest.TestCase):
+    def test_plugin_lista_las_dieciseis(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, ".claude-plugin", "plugin.json"), encoding="utf-8") as fh:
+            plugin = json.load(fh)
+        carpetas = sorted("./" + d for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "SKILL.md")))
+        # con un SKILL.md en la raíz y "skills": "./", Claude Code solo veía una skill: la lista explícita carga las dieciséis
+        self.assertEqual(sorted(plugin["skills"]), carpetas)
+        self.assertEqual(len(carpetas), 16)
+
+
 class Rutas(unittest.TestCase):
     def test_un_config_del_directorio_de_trabajo_no_tapa_el_de_kemet(self):
         d = tempfile.mkdtemp(prefix="kemet-rutas-")
