@@ -33,6 +33,7 @@ import argparse
 import datetime as dt
 import json
 import math
+import os
 import sys
 import urllib.error
 
@@ -64,7 +65,7 @@ TRADUCCIONES = (
     ("Advance GDP", "PIB adelantado", None), ("Prelim GDP", "PIB preliminar", None), ("Final GDP", "PIB final", None), ("GDP", "PIB", None),
     ("Core Retail Sales", "ventas minoristas subyacentes", None), ("Retail Sales", "ventas minoristas", None),
     ("ISM Manufacturing PMI", "ISM manufacturero", None), ("ISM Services PMI", "ISM servicios", None),
-    ("Crude Oil Inventories", "inventarios EIA", ["CL"]), ("Natural Gas Storage", "almacenamiento de gas natural", []),
+    ("Crude Oil Inventories", "inventarios EIA", ["CL"]), ("Natural Gas Storage", "almacenamiento de gas natural", ["NG"]),
     ("CB Consumer Confidence", "confianza del consumidor (Conference Board)", None),
     ("Prelim UoM Consumer Sentiment", "confianza del consumidor (Michigan, preliminar)", None),
     ("Revised UoM Consumer Sentiment", "confianza del consumidor (Michigan, revisada)", None),
@@ -181,6 +182,19 @@ def datos_del_calendario(texto, fecha, mercado=None):
         raise KemetError("el calendario no es JSON válido")
     if not isinstance(eventos, list):
         raise KemetError("el calendario no tiene la forma esperada (una lista de eventos)")
+    # Forex Factory solo publica la semana en curso: otro día no es «un día sin datos», es un día que no conocemos
+    dias = set()
+    for e in eventos:
+        try:
+            c = dt.datetime.fromisoformat(e["date"])
+            dias.add(comun.a_ny((c - c.utcoffset()).replace(tzinfo=None)).date() if c.utcoffset() is not None else c.date())
+        except (KeyError, TypeError, ValueError):
+            continue
+    if dias:
+        desde, hasta = min(dias), max(max(dias), min(dias) + dt.timedelta(days=6))     # de domingo a sábado
+        if not desde <= fecha <= hasta:
+            raise KemetError("el calendario gratuito solo trae la semana del %s al %s y pides el %s: escribe los datos de ese día con --dato "
+                             "(\"08:30 IPC fuerte\") o repite esa semana" % (desde.isoformat(), hasta.isoformat(), fecha.isoformat()))
     por_hora = {}
     fuera = []
     for e in eventos:
@@ -218,6 +232,21 @@ def datos_del_calendario(texto, fecha, mercado=None):
 
 
 def descargar_calendario():
+    """El calendario de la semana; se guarda una hora en kemet/estado/calendario.json (Forex Factory limita las peticiones)."""
+    cache = comun.ruta(os.path.join("estado", "calendario.json"))
+    viejo = comun.leer_json(cache, obligatorio=False)
+    if isinstance(viejo, dict) and viejo.get("texto"):
+        cuando = comun.de_iso(viejo.get("leido"))
+        if cuando and 0 <= (comun.utc_ahora() - cuando).total_seconds() < 3600:
+            return viejo["texto"]
+    texto = _bajar_calendario()
+    if texto.lstrip().startswith("<"):
+        raise KemetError("Forex Factory devolvió una página en vez del calendario (límite de peticiones): espera unos minutos o escribe la agenda con --dato")
+    comun.escribir_json(cache, {"leido": comun.iso(comun.utc_ahora()), "texto": texto})
+    return texto
+
+
+def _bajar_calendario():
     try:
         return comun._open_url(CALENDARIO_URL)
     except urllib.error.HTTPError as e:
@@ -236,7 +265,11 @@ def ventanas(datos, mercado, plano_a):
         m = VENTANA_FUERTE if d["fuerte"] else VENTANA
         out.append({"desde": mas(d["hora"], -m), "hasta": mas(d["hora"], m),
                     "motivo": "%s a las %s%s" % (d["nombre"], d["hora"], ", dato fuerte" if d["fuerte"] else "")})
-    out.append({"desde": APERTURA[0], "hasta": APERTURA[1], "motivo": "apertura: quien empieza espera"})
+    try:
+        abre = comun.resolver(mercado)["rth"][0] if mercado else APERTURA[0]   # CL y NG abren a las 09:00, GC a las 08:20
+    except (KemetError, KeyError):
+        abre = APERTURA[0]
+    out.append({"desde": abre, "hasta": mas(abre, 15), "motivo": "apertura: quien empieza espera"})
     out.append({"desde": mas(plano_a, -ANTES_DE_PLANO), "hasta": plano_a, "motivo": "últimos minutos antes de estar plano"})
     return sorted(out, key=lambda v: v["desde"])
 
@@ -259,16 +292,26 @@ def semaforo(cfg, datos, mercado, forzado=None):
         if base == "verde":
             base = "ambar"
     if not razones:
-        razones.append("sin datos fuertes en la agenda" if datos is not None else "sin agenda del día, doy por hecho que no hay datos fuertes")
+        if datos is not None:
+            razones.append("sin datos fuertes en la agenda")
+        else:
+            # sin agenda no se sabe si a las 08:30 sale el IPC: sigue en verde (decisión de Diego), pero el motivo lo dice
+            razones.append("sin agenda del día doy por hecho que no hay datos fuertes; no lo sé: escríbela con plan.py agenda --auto o --dato")
     return base, razones
 
 
-def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3):
-    """La regla Kemet, la misma de tamano.py: cuarto del drawdown o límite diario (el menor), mitad en ámbar/rojo, entre 3."""
+def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3, propia_dia=None, max_mini=None):
+    """La regla Kemet, la misma de tamano.py: cuarto del drawdown o límite diario (el menor), mitad en ámbar/rojo, entre 3.
+    `propia_dia` es la pérdida del día que fijó el usuario con tamano.py config --perdida-dia (en verde): manda sobre la regla."""
     c = comun.CONTRATOS[mercado]
     cuarto = round(drawdown * 0.25)
     base = min(diario, cuarto) if diario else cuarto
-    perdida = round(base * (1.0 if semaforo_ == "verde" else 0.5))
+    if propia_dia:
+        base = propia_dia
+    factor = 1.0 if semaforo_ == "verde" else 0.5
+    perdida = round(base * factor, 2) if propia_dia else round(base * factor)
+    if comun.sin_micro(mercado):
+        max_micro = max_mini
     riesgo = perdida / float(fallos)
     out = {"micro": c["micro"], "perdida_max_dia": perdida, "riesgo_por_operacion": round(riesgo, 2), "cuarto_drawdown": cuarto,
            "limite_diario_firma": diario, "fallos_y_paras": fallos, "max_micro": max_micro}
@@ -406,6 +449,19 @@ def construir(a):
                       % (mercado, "la config es de una cuenta de firma (futuros)" if cfg.get("firma") else "no hay cuenta propia configurada"))
     plano_a = cfg.get("plano_a") or c["plano"]
     comun.parse_hhmm(plano_a, "plano_a")
+    # festivos y sesiones recortadas: el plan no puede decir «hasta las 15:00» el día que CME para a las 13:00
+    clave = fecha.isoformat()
+    cerrados, recortados = (comun.NYSE_CERRADO, comun.NYSE_RECORTADO) if accion else (comun.CME_CERRADO, comun.CME_RECORTADO)
+    if clave in cerrados:
+        avisos.append("%s está cerrado el %s (%s): no hay sesión que planificar" % ("La NYSE" if accion else "CME", clave, cerrados[clave]))
+    elif clave in recortados:
+        corte = comun.CME_CORTE_RECORTADO.strftime("%H:%M")
+        plano_rec = "12:55"
+        cfg = dict(cfg, sin_entradas_despues=min(cfg.get("sin_entradas_despues") or "12:30", "12:30"))
+        plano_a = min(plano_a, plano_rec)
+        avisos.append("sesión recortada (%s): %s para a las %s NY. Plano a las %s y sin entradas nuevas después de las 12:30 NY%s"
+                      % (recortados[clave], "la NYSE" if accion else "CME", corte, plano_a,
+                         "" if accion or mercado in comun.INDICES else "; en %s confirma su horario de hoy en cmegroup.com" % mercado))
     zona = cfg.get("zona_usuario") or "Europe/Madrid"
     datos, aviso_agenda = agenda(fecha)
     if aviso_agenda:
@@ -423,7 +479,11 @@ def construir(a):
     elif accion:
         aviso_tam = "sin cuenta propia no hay tamaño en acciones: tamano.py config --propia --presupuesto … --max-perdida-operacion … --max-perdida-dia …"
     elif drawdown:
-        tam = tamano(mercado, sem, a.stop, float(drawdown), float(diario) if diario else None, cfg.get("max_micro"), int(cfg.get("fallos_y_paras") or 3))
+        propia_dia = None
+        if cfg.get("perdida_max_dia_origen") == "usuario" and cfg.get("perdida_max_dia"):
+            propia_dia = float(cfg["perdida_max_dia"]) * (2.0 if (cfg.get("semaforo") or "verde") != "verde" else 1.0)
+        tam = tamano(mercado, sem, a.stop, float(drawdown), float(diario) if diario else None, cfg.get("max_micro"), int(cfg.get("fallos_y_paras") or 3),
+                     propia_dia, cfg.get("max_mini"))
         if not a.stop:
             aviso_tam = "dime tu stop en puntos (--stop) y te digo cuántos %s caben" % c["micro"]
     elif a.stop:
@@ -631,14 +691,19 @@ def cmd_agenda(a):
             texto = comun.leer_texto(a.offline) if a.offline else descargar_calendario()
             auto, fuera = datos_del_calendario(texto, dt.date.fromisoformat(fecha), (a.mercado or "").upper() or None)
         except KemetError as e:
-            print("Error: %s" % e, file=sys.stderr)
-            return 1
+            if not datos:
+                print("Error: %s" % e, file=sys.stderr)
+                return 1
+            print("Aviso: %s. Guardo solo los datos que has dado con --dato." % e, file=sys.stderr)
+            auto, fuera = [], []
         datos = sorted(datos + auto, key=lambda d: d["hora"])
     doc = {"fecha": fecha, "datos": datos}
     if a.auto:
         doc["fuente"] = "Forex Factory (datos USD de impacto alto y medio)" if not a.offline else "archivo %s" % a.offline
     if a.json:
         print(comun.json.dumps(doc, ensure_ascii=False, indent=1))
+        if not a.escribir:
+            return 0                              # --json consulta; --escribir además la guarda
     else:
         print("Agenda del %s:" % fecha + ("" if datos else " sin datos (un día sin publicaciones también se escribe, para que el plan lo sepa)"))
         for d in datos:
@@ -650,7 +715,7 @@ def cmd_agenda(a):
             print("  Fuente: %s. Impacto alto = fuerte, medio = no fuerte, bajo fuera. Comprueba la hora de los datos que te importan." % (
                 "calendario semanal de Forex Factory" if not a.offline else a.offline))
     ruta = comun.escribir_json("agenda.json", doc)
-    print("Guardado %s" % ruta)
+    print("Guardado %s" % ruta, file=sys.stderr if a.json else sys.stdout)
     return 0
 
 
@@ -675,7 +740,8 @@ def main(argv=None):
     sa.add_argument("--mercado", help="con --auto: deja fuera los datos que solo afectan a otro contrato (la EIA si no es CL)")
     sa.add_argument("--offline", help="con --auto: un ff_calendar_thisweek.json guardado en vez de la red")
     sa.add_argument("--ahora", help='hora de Nueva York, "AAAA-MM-DD HH:MM"')
-    sa.add_argument("--json", action="store_true")
+    sa.add_argument("--json", action="store_true", help="imprime la agenda en JSON sin guardarla (con --escribir, también la guarda)")
+    sa.add_argument("--escribir", action="store_true", help="con --json: guarda además kemet/agenda.json")
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0].startswith("-"):
         argv.insert(0, "plan")                 # `plan.py --stop 40` vale como `plan.py plan --stop 40`

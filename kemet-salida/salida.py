@@ -248,7 +248,7 @@ def velas_hasta_entrada(codigo, dia, barra, hora, offline, ahora_utc):
 def calcular(codigo, lado, entrada, regla_stop, param_stop, regla_obj, param_obj, ib_alto=None, ib_bajo=None, atr=None, atr_n=None):
     """Stop, objetivo y riesgo al tick. Lanza Rechazo con el motivo. `codigo` es un futuro o un ticker de acciones."""
     con = resolver(codigo)
-    tick = con["tick"]
+    tick = con.get("tick_micro", con["tick"])      # el plan se opera en micros: un stop de M6E va a 0,0001
     if lado not in ("largo", "corto"):
         raise KemetError("--lado es largo o corto")
     e = al_tick(entrada, tick)
@@ -325,7 +325,7 @@ def reunir(a, cfg):
     """Los hechos de la entrada: de kemet/entrada.json o de los flags. Devuelve (codigo, info)."""
     doc = None
     manual = a.entrada is not None
-    ruta_in = a.de or comun.ruta("entrada.json")
+    ruta_in = comun.dada(a.de) or comun.ruta("entrada.json")
     if not manual or a.lado is None or a.ib_alto is None or a.ib_bajo is None:
         doc = leer_json(ruta_in, "ejecuta antes kemet-entrada (entrada.py check --escribir) o da --entrada, --lado, --ib-alto y --ib-bajo",
                         obligatorio=not manual)

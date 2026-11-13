@@ -71,10 +71,10 @@ class TestConfig(Base):
         self.assertEqual(cfg["fallos_y_paras"], 3)
         self.assertEqual((cfg["hora_limite"], cfg["hora_limite_tz"]), ("16:59", "America/New_York"))
         self.assertEqual(cfg["plano_a"], "15:55")
-        self.assertEqual((cfg["max_micro"], cfg["max_mini"]), (100, 10))
+        self.assertEqual((cfg["max_micro"], cfg["max_mini"]), (20, 2))          # nivel 1 de la PA de 50K (Apex, 13/11/2026)
         self.assertEqual((cfg["sin_entradas_antes"], cfg["sin_entradas_despues"]), ("09:45", "15:00"))
         self.assertTrue(cfg["papel"])
-        self.assertEqual(cfg["comprobado"], "30/10/2026")
+        self.assertEqual(cfg["comprobado"], "13/11/2026")
         self.assertTrue(cfg["fuente"].startswith("https://apextraderfunding.com"))
 
     def test_limite_diario_menor_que_el_cuarto(self):
@@ -159,7 +159,7 @@ class TestCalc(Base):
 
     def test_tope_de_la_cuenta(self):
         code, out, _ = run(["calc", "--firma", "apex", "--cuenta", "eod-pa-50", "--mercado", "NQ", "--stop", "0.5"])
-        self.assertIn("Contratos: 100 MNQ (tope de la cuenta: 100)", out)
+        self.assertIn("Contratos: 20 MNQ (tope de la cuenta: 20)", out)
 
 
 class TestOrden(Base):

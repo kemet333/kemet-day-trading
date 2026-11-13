@@ -1,19 +1,16 @@
 ---
 name: kemet-riesgo
 description: >-
-  La puerta entre una orden propuesta y tu plataforma. Comprueba cada orden de kemet/orden.json contra
-  kemet/config.json, la agenda de datos del día, lo que ya has operado hoy y el reloj de Globex, y da
-  PASS o BLOCK con el motivo: stop obligatorio y del lado correcto, pérdida al stop dentro del riesgo por
-  operación, suma del día dentro de la pérdida máxima del día, no más de tres operaciones (tres fallos y
-  paras), contratos dentro del tope de la cuenta, fuera de las ventanas de datos y de la apertura
-  09:30–09:45, dentro del horario de entradas, antes de la hora de estar plano y de la hora límite de la
-  firma, Globex abierto, sin duplicados. En acciones con la cuenta propia (órdenes en el formato de Alpaca),
-  además: reloj de la NYSE, bloqueados, tamaño mínimo y máximo, posición, efectivo con colchón, cortos y
-  opciones sin permiso, y lo que kemet-broker colocó hoy. Una orden de cierre nunca se bloquea por los
-  límites del día. Lleva el día en kemet/estado/dia.json: qué pusiste, qué cerraste, cuánto queda. Úsala
-  cuando el usuario diga «comprueba mi orden», «puedo entrar», «puedo comprar TSLA», «cuánto llevo arriesgado
-  hoy», «me queda margen», «apunta que he cerrado con -120», «cómo va el día», o siempre después de
-  kemet-tamano y antes de poner nada o de que kemet-broker lea el ticket.
+  La puerta entre una orden propuesta y tu plataforma. Comprueba cada orden contra tu configuración, la agenda
+  de datos del día, lo que ya has operado hoy, y da PASS o BLOCK con el motivo: stop obligatorio y del lado
+  correcto, pérdida al stop dentro del riesgo por operación, suma del día dentro de la pérdida máxima, no más
+  de tres operaciones, contratos dentro del tope de la cuenta, fuera de las ventanas de datos y de la
+  apertura, antes de la hora de estar plano y de la hora límite de la firma, Globex abierto. En acciones con
+  la cuenta propia, además: reloj de la NYSE, tamaño, posición, efectivo con colchón, cortos y opciones sin
+  permiso. Una orden de cierre nunca se bloquea por los límites del día. Lleva la cuenta del día. Úsala cuando
+  el usuario diga «comprueba mi orden», «puedo entrar», «puedo comprar TSLA», «me queda margen», «cuánto llevo
+  arriesgado hoy», «apunta que he cerrado con -120», «cómo va el día», o siempre después de kemet-tamano y
+  antes de poner nada.
 argument-hint: "[check | registrar --abrir | registrar --resultado -120 | hoy]"
 ---
 
@@ -55,8 +52,11 @@ toca parar (día agotado o tres operaciones).
 
 Una **entrada** abre o añade posición. Un **cierre** (`"cierre": true`, o en acciones una venta de lo que
 tienes en `kemet/portfolio.json`) solo saca de una. Salir siempre tiene que ser posible: a un cierre se le
-mira el formato y que el mercado esté abierto (Globex o la NYSE); todo lo demás se convierte en aviso, nunca
-en BLOCK.
+mira el formato y, en acciones, que la NYSE esté abierta; todo lo demás se convierte en aviso, nunca en BLOCK.
+Tres límites para que «cierre» no sirva para abrir: en futuros, un cierre no puede tener más contratos que el
+tope de la cuenta; en acciones, una compra marcada como cierre solo lo es si recompra un corto de
+`kemet/portfolio.json`; y una venta marcada como cierre de acciones que el pack no tiene apuntadas pasa con el
+aviso de comprobar antes la posición con `get_open_position` (si no las tiene, esa venta abre un corto).
 
 ## Las comprobaciones
 

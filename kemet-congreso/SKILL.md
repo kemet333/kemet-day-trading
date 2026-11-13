@@ -1,16 +1,16 @@
 ---
 name: kemet-congreso
 description: >-
-  Las operaciones en bolsa que los miembros de la Cámara de Representantes de EE. UU. están obligados a declarar
-  por la STOCK Act, leídas del House Clerk y en español: el índice anual de declaraciones, los PTR (Periodic
-  Transaction Reports) de un miembro, los presentados en los últimos días marcando los que no habías visto, y cada
-  PTR convertido en filas (quién, titular, activo, ticker, compra o venta, opciones con strike y vencimiento, fecha
-  de la operación, rango de importe y cuántos días tardó en declararse). Señala los tickers de tu watchlist o de
-  tu cartera. Escribe kemet/congreso.json. Son declaraciones públicas con hasta 45 días de retraso, no información
-  privilegiada: es un gancho para mirar un gráfico, no una estrategia. Úsala cuando el usuario diga «qué está
-  comprando Pelosi», «operaciones del Congreso», «qué declaran los políticos», «ha comprado algún congresista
-  X», «avísame cuando Pelosi presente algo», «lee este PTR». Va antes de kemet-scanner y kemet-entrada, que
-  deciden si hay operación hoy; nunca sustituye a ninguna de las dos.
+  Las operaciones en bolsa que los miembros de la Cámara de Representantes de EE. UU. están obligados a
+  declarar por la STOCK Act, leídas del House Clerk y en español: el índice anual de declaraciones, los PTR de
+  un miembro, los presentados en los últimos días marcando los que no habías visto, y cada PTR convertido en
+  filas (quién, activo, ticker, compra o venta, opciones, fecha, rango de importe y días que tardó en
+  declararse). Señala los tickers de tu watchlist o de tu cartera. Son declaraciones públicas con hasta 45
+  días de retraso, no información privilegiada: es un gancho para mirar un gráfico, no una estrategia. Úsala
+  cuando el usuario diga «qué está comprando Pelosi», «operaciones del Congreso», «qué declaran los
+  políticos», «ha comprado algún congresista X», «avísame cuando Pelosi presente algo», «lee este PTR». Va
+  antes de kemet-scanner y kemet-entrada, que deciden si hay operación hoy; nunca sustituye a ninguna de las
+  dos.
 argument-hint: "index --miembro pelosi [--anio 2026] | recientes --dias 45 [--miembro pelosi] [--leer] | ptr DOC_ID | texto ptr.txt"
 ---
 
@@ -50,7 +50,6 @@ un error (una línea, sin traza).
 | --- | --- |
 | `https://disclosures-clerk.house.gov/public_disc/financial-pdfs/<AÑO>FD.zip` | el índice del año: un `<Member>` por declaración (nombre, distrito, tipo, fecha, DocID). El Clerk lo rehace una vez al día |
 | `https://disclosures-clerk.house.gov/public_disc/ptr-pdfs/<AÑO>/<DocID>.pdf` | cada PTR; se guarda en `kemet/estado/ptr/<DocID>.pdf` |
-| `kemet/config.json` | `sec_user_agent` si lo hay, como identificación en las peticiones (kemet-tamano) |
 | `kemet/watchlist.json`, `kemet/portfolio.json` | los tickers que se señalan: `aciertos[].simbolo` (kemet-scanner) y `posiciones[].simbolo` (kemet-broker) |
 | `kemet/estado/congreso.json` | con `recientes --escribir`: los DocID ya enseñados (`vistos`) y `ultima_comprobacion`, para que cada PTR salga como nuevo una sola vez |
 | `kemet/congreso.json` | con `--escribir`: `generado`, `fuente`, `comando`, `anio`, `miembros`, `declaraciones[]` (las filas del índice), `nuevas[]`, `informes[]` (cada PTR leído con sus `operaciones[]`) |

@@ -64,10 +64,11 @@ class Base(unittest.TestCase):
         doc.update(extra)
         comun.escribir_json(os.path.join(self.kemet, "orden.json"), doc)
 
-    def veredicto(self, orden, fecha=HOY, veredicto="PASS", motivos=()):
+    def veredicto(self, orden, fecha=HOY, veredicto="PASS", motivos=(), hora_utc="15:15"):
         """Un kemet/estado/riesgo.json como el que escribe riesgo.py check, con la huella de esa orden."""
         comun.escribir_json(os.path.join(self.kemet, "estado", "riesgo.json"), {
             "fecha": fecha, "ahora_ny": fecha + " 10:16", "papel": True, "cuenta": CONFIG_PROPIA["cuenta_nombre"],
+            "comprobado": fecha + "T" + hora_utc + ":00Z", "simulado": True,
             "resultados": [{"indice": 1, "simbolo": "TSLA", "lado": "compra", "clase": "cierre" if orden.get("cierre") else "entrada",
                             "huella": broker.huella(orden), "veredicto": veredicto, "motivos": list(motivos), "avisos": [], "info": [], "orden": orden}],
             "pass": 1 if veredicto == "PASS" else 0, "block": 0 if veredicto == "PASS" else 1, "avisos": []})
@@ -99,7 +100,8 @@ class TestTicket(Base):
         self.assertEqual(t["instrumento"], "accion")
         self.assertEqual(t["herramienta"], "place_stock_order")
         self.assertEqual(t["entrada_herramienta"], {"symbol": "TSLA", "side": "buy", "qty": "8", "type": "market", "time_in_force": "day",
-                                                    "order_class": "bracket", "take_profit_limit_price": "396.65", "stop_loss_stop_price": "389.51"})
+                                                    "order_class": "bracket", "take_profit_limit_price": "396.65", "stop_loss_stop_price": "389.51",
+                                                    "client_order_id": "kemet-" + broker.huella(TSLA) + "-20261111-1"})
         self.assertNotIn("why", t["entrada_herramienta"])
         self.assertEqual(t["perdida_al_stop"], 28.56)
         self.assertIn("COMPRA 8 TSLA, a mercado, válida hoy", t["llano"])
@@ -240,10 +242,12 @@ class TestPlano(Base):
         code, tickets = self.mostrar(HOY + " 15:50")           # vuelve a pasar por kemet-riesgo: sin check no está lista
         self.assertEqual(code, 1)
         self.assertIn("no está en la última comprobación", tickets[0]["estado"])
-        self.assertEqual(tickets[0]["entrada_herramienta"], {"symbol": "TSLA", "side": "sell", "qty": "8", "type": "market", "time_in_force": "day"})
+        self.assertEqual(tickets[0]["entrada_herramienta"], {"symbol": "TSLA", "side": "sell", "qty": "8", "type": "market", "time_in_force": "day",
+                                                                  "client_order_id": tickets[0]["entrada_herramienta"]["client_order_id"]})
+        self.assertTrue(tickets[0]["entrada_herramienta"]["client_order_id"].startswith("kemet-"))
         self.assertTrue(tickets[0]["cierre"])
         self.assertIsNone(tickets[0]["perdida_al_stop"])
-        self.veredicto(o)                                        # con el PASS del cierre, lista
+        self.veredicto(o, hora_utc="20:50")                      # con el PASS del cierre (de las 15:50 NY), lista
         code, tickets = self.mostrar(HOY + " 15:51")
         self.assertEqual(code, 0)
         code, out, err = run(broker, ["registrar", "--huella", broker.huella(o), "--id-broker", "x2", "--precio", "391.00", "--ahora", HOY + " 15:52"])

@@ -1,18 +1,16 @@
 ---
 name: kemet-alertas
 description: >-
-  Alertas de precio y de hora con el reloj de Globex (futuros) y el de la NYSE (acciones de EE. UU.). Convierte el
-  plan de kemet-salida en tres alertas de una vez (el stop, el objetivo y «plano a» a tu hora), añade niveles por
-  encima o por debajo, movimientos en porcentaje sobre el cierre de la sesión regular anterior, cualquier hora del
-  día, la apertura de la sesión regular del contrato (el campanazo de las 09:30 en una acción) y un aviso cinco
-  minutos antes de la hora límite de tu firma; cada una suena una sola vez. Sabe cuándo está abierto CME Globex
-  (domingo 18:00 a viernes 17:00 NY, pausa diaria de 17:00 a 18:00, festivos y sesiones recortadas de 2026 y 2027) y
-  cuándo la NYSE (09:30 a 16:00 NY, festivos, 13:00 en los días recortados), calcula la hora de Nueva York y la de
-  Madrid sin zonas horarias del sistema, lee el último cierre de Yahoo (vela de 1 minuto si la hay, si no de 5) de
-  un futuro o de una acción y escribe kemet/precios.json. Úsala cuando el usuario diga «avísame cuando», «ponme las
-  alertas», «vigila mi stop», «recuérdame cerrar a las 15:55», «a qué hora tengo que estar plano», «está abierto el
-  mercado», «abre la bolsa», «dame el precio», «cuánto vale TSLA», o justo después de que kemet-salida escriba un
-  plan. Mientras la operación está abierta; antes, kemet-tamano y kemet-riesgo.
+  Alertas de precio y de hora con el reloj de Globex (futuros) y el de la NYSE (acciones de EE. UU.).
+  Convierte el plan de kemet-salida en tres alertas de una vez (el stop, el objetivo y «plano a» a tu hora) y
+  añade niveles, movimientos en porcentaje sobre el cierre anterior, cualquier hora del día, la apertura de la
+  sesión regular y un aviso cinco minutos antes de la hora límite de tu firma; cada una suena una sola vez.
+  Sabe cuándo está abierto CME Globex y cuándo la NYSE, con festivos y sesiones recortadas, da la hora de
+  Nueva York y la de Madrid y lee de Yahoo el último cierre de un futuro o de una acción. Úsala cuando el
+  usuario diga «avísame cuando», «ponme las alertas», «vigila mi stop», «recuérdame cerrar a las 15:55», «a
+  qué hora tengo que estar plano», «está abierto el mercado», «abre la bolsa», «dame el precio», «cuánto vale
+  TSLA», o justo después de que kemet-salida escriba un plan. Mientras la operación está abierta; antes,
+  kemet-tamano y kemet-riesgo.
 argument-hint: "[reloj | add --desde-plan | add --apertura | check | quote NQ|TSLA]"
 ---
 

@@ -59,15 +59,31 @@ PALABRAS_DUDA = {"no", "pero", "espera", "cancela", "cancelar", "para", "quizá"
                  "mitad", "baja", "sube", "ni", "tampoco", "igual", "creo"}
 BROKER = os.path.join("estado", "broker.json")
 RIESGO = os.path.join("estado", "riesgo.json")
+DIA = os.path.join("estado", "dia.json")
+PASS_MIN = 10            # un PASS de kemet-riesgo vale 10 minutos: después, el día, la hora o el precio pueden haber cambiado
+PALABRAS_NO = {"ninguna", "ninguno", "nunca", "jamás", "jamas", "nada", "real", "sin", "quita", "quitale", "quítale", "olvida", "olvídalo"}
+OTRO_LADO = {"compra": {"vende", "vender", "venta", "vendo", "corto", "short", "sell", "baja"},
+             "venta": {"compra", "comprar", "compro", "largo", "long", "buy", "sube"}}
+NO_TICKER = {"SI", "SÍ", "YES", "OK", "NY", "USD", "PASS"}
+# Lo único que puede acompañar a un sí: cortesía, «ponla», el ticker, las cifras y el lado de esta orden. Cualquier otra palabra
+# («sí, pero en real», «sí $(echo …)») hace que se pregunte otra vez.
+PALABRAS_CON_SI = {"sí", "si", "yes", "claro", "adelante", "dale", "vale", "ok", "venga", "por", "favor", "gracias", "pon", "ponla", "ponlo",
+                   "manda", "mándala", "mandala", "envía", "envia", "envíala", "enviala", "esa", "esta", "la", "las", "lo", "los", "el", "orden", "ticket",
+                   "de", "a", "en", "con", "y", "acciones", "acción", "accion", "contratos", "contrato", "micros", "micro", "papel",
+                   "bracket", "mercado", "límite", "limite", "stop", "objetivo", "puntos", "dólares", "dolares", "usd", "riesgo", "entrada",
+                   "confirmo", "confirmado", "confirmada", "ya", "perfecto", "perfecta", "listo", "correcto", "exacto", "hecho", "ponla", "adelante"}
+LADO_CON_SI = {"compra": {"compra", "comprar", "compro", "cómprala", "comprala", "largo", "long", "buy"},
+               "venta": {"venta", "vende", "vender", "vendo", "véndela", "vendela", "sell", "cierra", "cierre", "ciérrala", "cierrala", "ciérralo", "cierralo"}}
 
 
 # ---------------------------------------------------------------- utilidades
 
 def _f(x):
     try:
-        return float(x)
+        v = float(x)
     except (TypeError, ValueError):
         return None
+    return v if v == v and v not in (float("inf"), float("-inf")) else None
 
 
 def _txt(v):
@@ -123,13 +139,24 @@ def por_que_de(orden):
     return orden.get("por_que") or orden.get("why") or ""
 
 
-def entrada_alpaca(orden):
-    """Los argumentos exactos de place_stock_order: nombres de Alpaca, números como texto. `por_que` y `plan` nunca se envían."""
+def entrada_alpaca(orden, fecha=None, intento=1):
+    """Los argumentos exactos de place_stock_order: nombres de Alpaca, números como texto. `por_que` y `plan` nunca se envían.
+    Lleva un client_order_id con la huella, el día y el número de sí de hoy para esa orden: si la misma llamada se repite (un
+    timeout, un reintento), Alpaca rechaza la segunda; otro día, o después de otro sí, el id es otro."""
     out = {}
     for k in CAMPOS_ALPACA:
         if k in orden and orden[k] is not None:
             out[k] = _txt(orden[k]) if k in CAMPOS_TEXTO else orden[k]
+    out.setdefault("client_order_id", "kemet-%s%s-%d" % (huella(orden), ("-" + str(fecha).replace("-", "")) if fecha else "", intento))
     return out
+
+
+def intento_de(estado, h, fecha):
+    """El número del sí que vale para esa orden hoy: el último aprobado si está pendiente de enviar, si no el siguiente."""
+    recs = [r for r in (estado or {}).get("ordenes", []) if r.get("huella") == h and str(r.get("fecha")) == fecha]
+    aprobadas = sum(1 for r in recs if r.get("estado") == "aprobada")
+    pendiente = bool(recs) and recs[-1].get("estado") == "aprobada"
+    return max(1, aprobadas if pendiente else aprobadas + 1)
 
 
 def es_bracket(orden):
@@ -286,7 +313,7 @@ def _numeros(texto):
             continue
         cand = set()
         if "," in s and "." in s:
-            cand.add(s.replace(".", "").replace(",", "."))
+            cand.add(s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", "."))
         elif "," in s:
             cand.add(s.replace(",", "."))
         elif "." in s:
@@ -315,17 +342,31 @@ def es_un_si(respuesta, orden, simbolos_del_lote=()):
         return False, "un sí cubre una orden, no un lote"
     if PALABRAS_DUDA & set(palabras[1:]):
         return False, "la respuesta lleva una condición o una duda; pregunta otra vez"
+    if PALABRAS_NO & set(palabras[1:]):
+        return False, "la respuesta lleva una negación o pide otra cosa (%s); pregunta otra vez" % ", ".join(sorted(PALABRAS_NO & set(palabras[1:])))
+    if OTRO_LADO.get(lado_de(orden), set()) & set(palabras[1:]):
+        return False, "la respuesta habla del otro lado y esta orden es una %s" % lado_de(orden)
     sim = simbolo_de(orden)
+    extra = set(palabras[1:]) - PALABRAS_CON_SI - LADO_CON_SI.get(lado_de(orden), set()) - set(re.findall(r"[a-záéíóúüñ']+", sim.lower()))
+    if extra:
+        return False, "la respuesta lleva algo más que un sí para esta orden (%s); pregunta otra vez" % ", ".join(sorted(extra))
     tokens = set(re.findall(r"[A-Z][A-Z.\-]{0,6}", raw.upper()))
     otros = {str(s).upper() for s in simbolos_del_lote} - {sim}
     nombrados = tokens & otros
+    # un ticker escrito en mayúsculas que no es el de la orden (AAPL en una orden de TSLA) tampoco vale
+    if not raw.isupper():                    # «SÍ, PONLA» entero en mayúsculas no nombra ningún ticker
+        nombrados |= {x for x in re.findall(r"\b[A-Z]{2,5}(?:\.[A-Z])?\b", raw) if x != sim and x not in NO_TICKER}
     if nombrados:
         return False, "la respuesta nombra %s y esta orden es de %s" % (", ".join(sorted(nombrados)), sim)
-    nums = _numeros(raw)
-    if nums:
-        quiere = cifras(orden)
-        if not any(abs(n - w) < 0.005 for n in nums for w in quiere):
-            return False, "la respuesta dice %s y esta orden es %s" % (", ".join(pts(n) for n in sorted(set(nums))), llano(orden))
+    # cada cifra que escribe el usuario tiene que ser de esta orden (antes bastaba con que cuadrara una)
+    quiere = cifras(orden)
+    sueltos = []
+    for tok in re.findall(r"\d(?:[\d.,]*\d)?", raw):
+        lecturas = _numeros(tok)
+        if lecturas and not any(abs(n - w) < 0.005 for n in lecturas for w in quiere):
+            sueltos.append(lecturas[0])
+    if sueltos:
+        return False, "la respuesta dice %s y esta orden es %s" % (", ".join(pts(n) for n in sorted(set(sueltos))), llano(orden))
     return True, "sí explícito para %s" % llano(orden)
 
 
@@ -356,6 +397,24 @@ def ultimo(estado, h, fecha):
     return out
 
 
+def validez_del_pass(riesgo, ahora, simulado_aqui, dia):
+    """Por qué el último check ya no vale para poner una orden, o None. Un PASS caduca a los PASS_MIN minutos, no vale si se hizo
+    con --ahora (salvo que el ticket también sea una simulación) ni si kemet/estado/dia.json cambió después (otra operación, un resultado)."""
+    if not isinstance(riesgo, dict):
+        return None
+    if riesgo.get("simulado") and not simulado_aqui:
+        return "la comprobación de riesgo se hizo con --ahora (simulación): repite riesgo.py check sin --ahora"
+    cuando = comun.de_iso(riesgo.get("comprobado"))
+    if cuando is None:
+        return "la comprobación de riesgo no dice a qué hora se hizo: repite riesgo.py check"
+    edad = (ahora - cuando).total_seconds() / 60.0
+    if edad > PASS_MIN or edad < -1:
+        return "la comprobación de riesgo es de las %s NY y un PASS vale %d minutos: repite riesgo.py check" % (comun.hhmm(comun.a_ny(cuando)), PASS_MIN)
+    if "dia_huella" in riesgo and riesgo.get("dia_huella") != comun.huella_dia(dia):
+        return "kemet/estado/dia.json cambió después de la comprobación (otra operación o un resultado): repite riesgo.py check"
+    return None
+
+
 def veredicto_de(riesgo, h, fecha):
     """(resultado de kemet-riesgo, por qué no) para esa huella hoy."""
     if not riesgo:
@@ -376,6 +435,8 @@ def estado_de(orden, riesgo, estado, fecha):
         return False, "NO LISTA: " + por_que, None
     if rv.get("veredicto") != "PASS":
         return False, "BLOQUEADA por kemet-riesgo: " + "; ".join(rv.get("motivos", [])), rv
+    if riesgo.get("_no_vale"):
+        return False, "NO LISTA: " + riesgo["_no_vale"], rv
     rec = ultimo(estado, h, fecha)
     if rec:
         st = rec.get("estado")
@@ -407,7 +468,7 @@ def render(orden, i, total, cfg, riesgo, estado, fecha):
         lineas.append("  aviso: " + w)
     if es_accion(orden):
         lineas.append("  Claude llamará a place_stock_order exactamente con:")
-        for l in json.dumps(entrada_alpaca(orden), indent=2, ensure_ascii=False).splitlines():
+        for l in json.dumps(entrada_alpaca(orden, fecha, intento_de(estado, huella(orden), fecha)), indent=2, ensure_ascii=False).splitlines():
             lineas.append("    " + l)
         if es_bracket(orden):
             lineas.append("  Alpaca pone la entrada y después el stop-loss y el take-profit como dos órdenes que se anulan entre sí:")
@@ -428,7 +489,7 @@ def ticket_json(orden, i, cfg, riesgo, estado, fecha):
     accion = es_accion(orden)
     return {"indice": i, "lista": lista, "estado": etiqueta, "llano": llano(orden), "huella": huella(orden),
             "instrumento": "accion" if accion else "futuro", "papel": bool(cfg.get("papel", True)),
-            "herramienta": "place_stock_order" if accion else None, "entrada_herramienta": entrada_alpaca(orden) if accion else None,
+            "herramienta": "place_stock_order" if accion else None, "entrada_herramienta": entrada_alpaca(orden, fecha, intento_de(estado, huella(orden), fecha)) if accion else None,
             "a_mano": not accion, "por_que": por_que_de(orden), "bracket": es_bracket(orden) if accion else None,
             "perdida_al_stop": perdida, "stop": stop, "riesgo_pts": riesgo_pts, "cierre": bool(orden.get("cierre"))}
 
@@ -505,14 +566,18 @@ def aplicar_fill(cfg, simbolo, lado, cantidad, precio, accion, cuando):
 
 # ---------------------------------------------------------------- subcomandos
 
-def _reloj(a):
+def _reloj(a, ordenes=(), cfg=None):
+    """(ahora, fecha, hora). La fecha es la de las reglas: el día de CME (desde las 18:00 NY) en futuros, el natural en acciones."""
     ahora = comun.parse_ahora(getattr(a, "ahora", None))
     ny = comun.a_ny(ahora)
-    return ahora, ny.date().isoformat(), comun.hhmm(ny)
+    propia = (cfg or {}).get("tipo_cuenta") == "propia" or (cfg or {}).get("cuenta") == "propia"
+    acciones = any(es_accion(o) for o in ordenes) if ordenes else (propia or not cfg)
+    fecha = ny.date() if (acciones or propia) else comun.dia_negociacion(ny)
+    return ahora, fecha.isoformat(), comun.hhmm(ny)
 
 
 def _ordenes(a):
-    doc = comun.leer_json(getattr(a, "orden", None) or "orden.json", "ejecuta tamano.py orden --escribir, o broker.py plano")
+    doc = comun.leer_json(comun.dada(getattr(a, "orden", None)) or "orden.json", "ejecuta tamano.py orden --escribir, o broker.py plano")
     ordenes = doc.get("ordenes") if isinstance(doc, dict) else doc
     if not isinstance(ordenes, list) or not ordenes:
         raise KemetError("no hay órdenes en %s" % (getattr(a, "orden", None) or comun.ruta("orden.json")))
@@ -524,7 +589,10 @@ def _cargar(a):
     cfg = cargar_config()
     riesgo = comun.leer_json(comun.ruta(RIESGO), obligatorio=False)
     estado = cargar_estado()
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, ordenes, cfg)
+    no_vale = validez_del_pass(riesgo, ahora, bool(getattr(a, "ahora", None)), comun.leer_json(comun.ruta(DIA), obligatorio=False))
+    if no_vale:
+        riesgo = dict(riesgo, _no_vale=no_vale)
     return ordenes, cfg, riesgo, estado, ahora, fecha, hora
 
 
@@ -569,6 +637,8 @@ def cmd_aprobar(a):
     lista, etiqueta, rv = estado_de(o, riesgo, estado, fecha)
     if not lista:
         raise KemetError("la orden %s no está lista: %s" % (huella(o), etiqueta))
+    if a.respuesta == "-":
+        a.respuesta = sys.stdin.read().strip()
     vale, por_que = es_un_si(a.respuesta, o, [simbolo_de(x) for x in ordenes])
     if not vale:
         print("No apuntado: %s. Vuelve a enseñar el ticket %s al usuario y pregunta otra vez." % (por_que, huella(o)))
@@ -583,7 +653,7 @@ def cmd_aprobar(a):
     print("Apuntado tu sí para %s: %s." % (huella(o), llano(o)))
     if es_accion(o):
         print("Ahora llama a place_stock_order exactamente con:")
-        print(json.dumps(entrada_alpaca(o), indent=2, ensure_ascii=False))
+        print(json.dumps(entrada_alpaca(o, fecha, intento_de(estado, huella(o), fecha)), indent=2, ensure_ascii=False))
         print("La tarjeta de Claude dice Permitir una vez o Denegar. Después: broker.py registrar --huella %s --id-broker ID --precio PRECIO" % huella(o))
     else:
         print("Ponla tú en tu plataforma, con el stop puesto antes de confirmar. Después: riesgo.py registrar --abrir y broker.py registrar --huella %s --precio PRECIO" % huella(o))
@@ -618,7 +688,7 @@ def _buscar_orden(h, riesgo, estado, fecha):
 
 
 def cmd_registrar(a):
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, (), cargar_config())
     cfg = cargar_config()
     riesgo = comun.leer_json(comun.ruta(RIESGO), obligatorio=False)
     estado = cargar_estado()
@@ -708,7 +778,7 @@ def _registrar_suelto(a, cfg, estado, ahora, fecha, hora):
 
 
 def cmd_plano(a):
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, (), cargar_config())
     cfg = cargar_config()
     sim = a.simbolo.strip().upper()
     inst = comun.resolver(sim)
@@ -778,7 +848,7 @@ def cmd_plano(a):
 
 def cmd_hoy(a):
     estado = cargar_estado()
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, (), cargar_config())
     filas = [r for r in estado.get("ordenes", []) if a.todo or str(r.get("fecha")) == fecha]
     if not filas:
         print("Nada apuntado%s." % ("" if a.todo else " hoy"))
@@ -812,7 +882,8 @@ def main(argv=None):
     p = sub.add_parser("aprobar", help="apunta el sí explícito del usuario para una orden")
     p.add_argument("--orden")
     cual(p)
-    p.add_argument("--respuesta", required=True, help="la respuesta del usuario, palabra por palabra")
+    p.add_argument("--respuesta", required=True, help="la respuesta del usuario, palabra por palabra; «-» la lee de la entrada estándar "
+                                                         "(así se pasa: --respuesta - <<'SI' … SI, para que nada se ejecute)")
     reloj(p)
     p = sub.add_parser("rechazar", help="apunta un no")
     p.add_argument("--orden")

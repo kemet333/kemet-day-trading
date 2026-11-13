@@ -1,18 +1,16 @@
 ---
 name: kemet-broker
 description: >-
-  La única skill del pack que puede acabar en una orden puesta, y por eso la más estricta. Convierte cada orden de
-  kemet/orden.json en un ticket en palabras llanas (una bracket enseña su stop-loss, su take-profit y la pérdida al
-  stop) y la marca LISTA solo si kemet-riesgo le dio PASS hoy a esa orden exacta, por su huella. Claude lee el ticket
-  al usuario, espera un sí explícito para ese ticket en el chat, lo apunta palabra por palabra y solo entonces llama al
-  conector del bróker: Alpaca por su servidor MCP oficial, cuenta papel por defecto, con la herramienta en «Necesita
-  aprobación» para que la tarjeta de Claude vuelva a preguntar. Apunta el fill en kemet/estado/broker.json y en
-  kemet/portfolio.json, y construye la orden que cierra una posición antes de la hora de estar plano. Para futuros no
-  hay conector gratuito: el ticket se enseña igual y la operación la pone el usuario en su plataforma. Cubre cómo
-  instalar el servidor de Alpaca en Claude Desktop y Claude Code con las claves en el archivo de configuración, nunca
-  en el chat. Úsala cuando el usuario diga «pon la orden», «cómprala», «envíala al bróker», «ejecuta», «cierra la
-  posición», «sácame», «ponme plano», «conecta Alpaca», «quiero operar en papel», o siempre después de un PASS de
-  kemet-riesgo.
+  La única skill del pack que puede acabar en una orden puesta. Convierte cada orden propuesta en un ticket en
+  palabras llanas (con su stop, su objetivo y la pérdida al stop) y solo la da por lista si kemet-riesgo le
+  dio PASS hoy a esa orden exacta. Claude lee el ticket al usuario, espera un sí explícito para ese ticket en
+  el chat y solo entonces llama al conector del bróker: Alpaca por su servidor MCP oficial, cuenta papel por
+  defecto, con la herramienta en «Necesita aprobación». Apunta el fill y construye la orden que cierra una
+  posición antes de la hora de estar plano. Para futuros no hay conector gratuito: el ticket se enseña igual y
+  la operación la pone el usuario en su plataforma. Las claves van en la configuración, nunca en el chat.
+  Úsala cuando el usuario diga «pon la orden», «cómprala», «envíala al bróker», «ejecuta», «cierra la
+  posición», «sácame», «ponme plano», «conecta Alpaca», «quiero operar en papel», o siempre después de un PASS
+  de kemet-riesgo.
 argument-hint: "[mostrar | aprobar --huella H --respuesta «sí» | registrar --huella H --id-broker ID --precio P | plano --simbolo TSLA]"
 ---
 
@@ -29,7 +27,10 @@ cambia eso: estas puertas evitan la orden que no querías, no hacen ganar ningun
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/broker.py" mostrar                                     # cada orden como ticket, LISTA o no
 python3 "${CLAUDE_SKILL_DIR}/broker.py" mostrar --huella 28e10297de27 --json
-python3 "${CLAUDE_SKILL_DIR}/broker.py" aprobar --huella 28e10297de27 --respuesta "sí"   # el sí del usuario, palabra por palabra
+python3 "${CLAUDE_SKILL_DIR}/broker.py" aprobar --huella 28e10297de27 --respuesta - <<'SI'
+sí
+SI
+# el sí del usuario, palabra por palabra, siempre por la entrada estándar: entre comillas en la línea de órdenes, un «$(…)» se ejecutaría
 python3 "${CLAUDE_SKILL_DIR}/broker.py" rechazar --huella 28e10297de27 --respuesta "no"
 python3 "${CLAUDE_SKILL_DIR}/broker.py" registrar --huella 28e10297de27 --id-broker ID --precio 393.10 [--cantidad 8]
 python3 "${CLAUDE_SKILL_DIR}/broker.py" registrar --huella 28e10297de27 --estado denegada|fallida [--nota "..."]
@@ -37,6 +38,13 @@ python3 "${CLAUDE_SKILL_DIR}/broker.py" registrar --simbolo TSLA --lado venta --
 python3 "${CLAUDE_SKILL_DIR}/broker.py" plano --simbolo TSLA                        # la venta que cierra la posición, a kemet/orden.json
 python3 "${CLAUDE_SKILL_DIR}/broker.py" hoy                                         # lo apuntado hoy
 ```
+
+**Lo que de verdad protege.** `broker.py` no envía nada y sus comprobaciones las puede saltar quien edite `kemet/`: la
+última puerta es la tarjeta de Claude. Por eso `place_stock_order` va siempre en «Necesita aprobación» (nunca «Permitir
+siempre» ni un modo que apruebe solo), y antes de la primera orden de la sesión se mira la cuenta con `get_account_info`:
+una cuenta papel de Alpaca tiene un número que empieza por `PA`. Si no empieza por `PA`, es dinero real: no se envía nada
+y se le dice al usuario. Un PASS vale 10 minutos y deja de valer si cambia `kemet/estado/dia.json`; uno hecho con
+`--ahora` es una simulación y nunca deja una orden LISTA.
 
 `broker.py` no habla con ningún bróker: enseña tickets, comprueba que una respuesta es un sí de verdad para esa orden,
 apunta lo que pasó y construye la orden de cierre. `--ahora "2026-11-11 10:16"` fija el reloj (hora de Nueva York).
@@ -85,7 +93,7 @@ cuenta **papel** salvo que se le diga lo contrario. Comprobado en su repositorio
   "mcpServers": {
     "alpaca": {
       "command": "uvx",
-      "args": ["alpaca-mcp-server"],
+      "args": ["alpaca-mcp-server==2.4.0"],
       "env": {
         "ALPACA_API_KEY": "TU_CLAVE_PAPEL_ESCRITA_AQUI_NUNCA_EN_EL_CHAT",
         "ALPACA_SECRET_KEY": "TU_SECRETO_PAPEL_ESCRITO_AQUI_NUNCA_EN_EL_CHAT",
@@ -116,7 +124,10 @@ cuenta **papel** salvo que se le diga lo contrario. Comprobado en su repositorio
 
 En Claude Code, en vez de Claude Desktop, el servidor se añade con `claude mcp add` con las mismas variables de entorno,
 y la herramienta de órdenes se deja en «preguntar» en `.claude/settings.json`:
-`"permissions": {"ask": ["mcp__alpaca__place_stock_order"]}`. Nunca una herramienta de órdenes en `allow`.
+`"permissions": {"ask": ["mcp__alpaca"]}` (todas las herramientas de Alpaca preguntan) y, en `deny`, las que nunca hacen
+falta: `mcp__alpaca__close_all_positions`, `mcp__alpaca__cancel_all_orders`, `mcp__alpaca__place_option_order`,
+`mcp__alpaca__place_crypto_order`. Nunca una herramienta de órdenes en `allow`, ni el modo que aprueba solo. Añádelo con
+`claude mcp add --scope user` o `--scope local`: con `--scope project` las claves acabarían en `.mcp.json`, que se sube a git.
 
 **Brackets en Alpaca.** `place_stock_order` acepta `take_profit_limit_price` y `stop_loss_stop_price` (y un
 `stop_loss_limit_price` opcional). Con cualquiera de los dos, el servidor pone `order_class` en `bracket` solo;
@@ -130,7 +141,8 @@ Son órdenes del día: mueren en el cierre, una razón más para estar plano ant
    a kemet-tamano si la orden tiene que cambiar).
 2. Enseña UN ticket y pregunta: «¿Pongo esta orden? Responde sí o no». Una orden por pregunta. Nunca ofrezcas «sí a
    todas».
-3. `broker.py aprobar --huella H --respuesta "<la respuesta del usuario, palabra por palabra>"`. Si imprime «No
+3. `broker.py aprobar --huella H --respuesta -` con la respuesta del usuario, palabra por palabra, por la entrada estándar
+   en un heredoc con el delimitador entre comillas simples (`<<'SI'` … `SI`), nunca entre comillas en la línea. Si imprime «No
    apuntado», la respuesta no era un sí explícito para esa orden (por ejemplo «vale», «sí a las dos», una pregunta, o
    un sí que nombra otro símbolo u otra cifra). Pregunta otra vez. Nunca conviertas tú una respuesta en un sí.
 4. Solo después de «Apuntado tu sí», llama a `place_stock_order` exactamente con el JSON que imprimió el ticket.

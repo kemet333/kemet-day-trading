@@ -2,18 +2,15 @@
 name: kemet-diario
 description: >-
   Revisión del diario de operaciones midiendo cumplimiento del plan antes que resultado. Lee un CSV de
-  operaciones de futuros (micros y minis) o de acciones de EE. UU. (el ticker, la cantidad en acciones)
-  (columnas en español o inglés, separador coma o punto y coma, decimales con coma) y cuenta
-  hechos: operaciones sin stop, entradas en la apertura 09:30–09:45 y en las ventanas de datos de la agenda,
-  riesgo al stop por encima del riesgo por operación de kemet/config.json, pérdidas mayores que el stop,
-  entradas después de la hora de estar plano y de la hora límite de la firma, días que superaron la pérdida
-  máxima del día, entradas después de la tercera pérdida; resultado por franja horaria y por día de la
-  semana; métricas con 20 operaciones o más (expectativa en dólares y en R, acierto y ratio, ganancias
-  entre pérdidas, racha, drawdown frente al de la cuenta); y la revisión de kemet-desk: tres cosas bien con la
-  operación que lo demuestra, dos rupturas del plan con su coste en dólares, una sola corrección para
-  mañana. Nunca califica al trader. Úsala cuando el usuario diga «revísame el diario», «cómo me ha ido»,
-  «qué estoy haciendo mal», «aquí están mis operaciones», «analiza mi semana», o al cerrar una sesión. Va
-  después de operar; la corrección que sale alimenta el plan de mañana (kemet-plan).
+  operaciones de futuros o de acciones de EE. UU. y cuenta hechos: operaciones sin stop, entradas en la
+  apertura 09:30 a 09:45 y en las ventanas de datos, riesgo al stop por encima del riesgo por operación,
+  pérdidas mayores que el stop, entradas después de la hora de estar plano, días por encima de la pérdida
+  máxima, entradas tras la tercera pérdida; resultado por franja horaria y por día de la semana; métricas con
+  20 operaciones o más (expectativa en dólares y en R, acierto, ratio, racha, drawdown). Cierra con tres cosas
+  bien, dos rupturas del plan con su coste en dólares y una sola corrección para mañana. Nunca califica al
+  trader. Úsala cuando el usuario diga «revísame el diario», «cómo me ha ido», «qué estoy haciendo mal», «aquí
+  están mis operaciones», «analiza mi semana», o al cerrar una sesión. Va después de operar; la corrección
+  alimenta el plan de mañana (kemet-plan).
 argument-hint: "revisar operaciones.csv [--desde AAAA-MM-DD] [--hasta AAAA-MM-DD] [--stop-habitual PTS]"
 ---
 
@@ -81,8 +78,12 @@ por operación es el del config y no hay hora límite de firma (sale «no medibl
 
 ## Pasos
 
-1. Pide el CSV o ayúdale a hacerlo con `plantilla`. Si exporta de su plataforma, basta con renombrar
-   columnas; no hace falta que lo rellene a mano.
+1. Pide el CSV o ayúdale a hacerlo con `plantilla`. Una exportación de su plataforma no entra tal cual: cada
+   una tiene sus columnas (Tradovate no trae el lado, NinjaTrader usa «Market pos.», Alpaca exporta fills sin
+   emparejar). Ayúdale a convertirla a una fila por operación con las columnas de `plantilla` (lee el archivo,
+   empareja entradas y salidas, escribe el CSV nuevo y enséñale las primeras filas antes de revisar). Las cifras
+   con formato de EE. UU. (1,234.50) y las fechas mes/día se detectan solas; si el archivo no lo deja claro, el
+   aviso lo dice y `--decimal punto` o `--fechas mdy` lo fijan.
 2. Si hay `kemet/config.json`, la revisión mide el tamaño y la pérdida máxima del día con sus reglas; si no,
    dilo y ofrece `tamano.py config`. Si quiere medir las ventanas de datos de un día, `plan.py agenda` con
    los datos de ese día.

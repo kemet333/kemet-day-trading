@@ -1,20 +1,16 @@
 ---
 name: kemet-tamano
 description: >-
-  Tamaño por operación en cuentas de fondeo. Convierte tu firma y tu cuenta (Topstep, Apex, Tradeify,
-  Alpha Futures, Lucid: 76 cuentas con fecha de comprobación) en kemet/config.json con la regla Kemet
-  para quien empieza: pérdida máxima del día = la menor entre el límite diario de la firma y un cuarto
-  del drawdown, riesgo por operación = un tercio de eso (tres fallos y paras). Con un stop en puntos dice
-  cuántos micros caben; con el plan de kemet-salida escribe UNA orden bracket en micros a kemet/orden.json
-  con el tope de la cuenta y lo que queda del día. Un plan que no cabe en 0 contratos es un rechazo con
-  motivo, no una orden más pequeña. También la cuenta propia (--propia: presupuesto, pérdida máxima por
-  operación y del día) para acciones de EE. UU. o futuros sin firma: tamaño en acciones enteras con los
-  topes de posición, orden máxima y efectivo, y la orden bracket en el formato de place_stock_order de
-  Alpaca que kemet-broker puede enviar en cuenta papel tras el PASS de kemet-riesgo y tu sí. Úsala cuando el
-  usuario diga «cuántos contratos», «cuántos micros caben», «cuántas acciones», «qué tamaño pongo», «tengo
-  una Apex 50K», «tengo 5.000 dólares en Alpaca», «mi stop son 18 puntos», «mi stop son 3 dólares»,
-  «configura mi cuenta», «qué reglas tiene mi firma», o después de que kemet-salida escriba un plan. Va
-  antes de kemet-riesgo; kemet-plan usa la misma regla para el tamaño del plan de sesión.
+  Tamaño por operación en cuentas de fondeo. Convierte tu firma y tu cuenta (Topstep, Apex, Tradeify, Alpha
+  Futures y Lucid) en tu configuración con la regla Kemet: pérdida máxima del día = la menor entre el límite
+  diario de la firma y un cuarto del drawdown, riesgo por operación = un tercio de eso (tres fallos y paras).
+  Con un stop en puntos dice cuántos micros caben; con el plan de kemet-salida escribe una sola orden bracket
+  en micros. Si no cabe, rechazo con motivo, nunca una orden más pequeña. También la cuenta propia para
+  acciones de EE. UU. o futuros sin firma: tamaño en acciones enteras con sus topes y una bracket que
+  kemet-broker puede enviar en cuenta papel tras el PASS de kemet-riesgo y tu sí. Úsala cuando el usuario diga
+  «configura mi cuenta», «cuántos micros caben», «cuántas acciones», «qué tamaño pongo», «tengo una Apex 50K»,
+  «mi stop son 18 puntos», «qué reglas tiene mi firma», o después de que kemet-salida escriba un plan. Va
+  antes de kemet-riesgo.
 argument-hint: "[--firma apex --cuenta eod-pa-50 --mercado NQ | --propia --presupuesto 5000 --max-perdida-operacion 50 --max-perdida-dia 150 --mercado TSLA] [--stop 18]"
 ---
 
@@ -122,7 +118,8 @@ hay un error.
 
 ## Ejemplo: NQ, miércoles 11 de noviembre de 2026
 
-Apex 50K EOD financiada (`--firma apex --cuenta eod-pa-50`): drawdown 2.000 $, límite diario 1.000 $.
+Apex 50K EOD financiada (`--firma apex --cuenta eod-pa-50`): drawdown 2.000 $, límite diario 1.000 $ y 2 minis
+(20 micros) en el nivel 1 de escalado de la PA; Apex los sube con el saldo, así que mira tu nivel en el panel.
 
 ```
 $ python3 tamano.py config --firma apex --cuenta eod-pa-50 --mercado NQ
@@ -130,7 +127,7 @@ Config escrita en kemet/config.json
 Cuenta: Apex Trader Funding · 50K EOD fondeada (PA) (financiada) · mercado NQ
 Drawdown 2.000 $ (eod_trailing) · límite diario de la firma 1.000 $
 Pérdida máxima del día (verde): 500 $ · riesgo por operación: 166,67 $ (tres fallos y paras)
-Tope de contratos: 100 micros · 10 minis
+Tope de contratos: 20 micros · 2 minis
 Hora límite de la firma: 16:59 America/New_York · plano a las 15:55 NY · sin entradas antes de 09:45 ni después de 15:00 NY
 ```
 
@@ -159,7 +156,7 @@ Cuenta: Apex Trader Funding · 50K EOD fondeada (PA) · pérdida máxima del dí
 
 Límites (micros enteros; manda el menor):
   riesgo por operación   166,67 $ / 234,50 $ por micro                                       0 MNQ  <- manda
-  tope de la cuenta      100 micros en Apex Trader Funding · 50K EOD fondeada (PA)         100 MNQ
+  tope de la cuenta      20 micros en Apex Trader Funding · 50K EOD fondeada (PA)           20 MNQ
   lo que queda del día   500 $ menos 0 $ abierto y 0 $ perdido = 500 $ / 234,50 $            2 MNQ
 
 Sin orden: un MNQ arriesga 234,50 $ al stop (117,25 puntos × 2 $/pt), más que tu riesgo por operación de 166,67 $. Déjala pasar o planifica un stop más corto con kemet-salida
@@ -175,7 +172,7 @@ largo NQ a 28.429,75 (10:45) · stop 28.312,50 · objetivo 28.547 · riesgo 117,
 
 Límites (micros enteros; manda el menor):
   riesgo por operación   333,33 $ / 234,50 $ por micro                                       1 MNQ  <- manda
-  tope de la cuenta      170 micros en Apex Trader Funding · 150K EOD fondeada (PA)        170 MNQ
+  tope de la cuenta      40 micros en Apex Trader Funding · 150K EOD fondeada (PA)          40 MNQ
   lo que queda del día   1.000 $ menos 0 $ abierto y 0 $ perdido = 1.000 $ / 234,50 $        4 MNQ
 
 Tamaño: 1 MNQ. Pérdida al stop: 1 × 234,50 $ = 234,50 $.

@@ -376,12 +376,13 @@ class Acciones(Base):
         self.assertEqual([r["veredicto"] for r in res["resultados"]], ["BLOCK", "PASS"])
         self.assertIn("día:", self.motivos(res))
         self.assertEqual((res["resultados"][1]["clase"], res["resultados"][1]["motivos"]), ("cierre", []))
-        self.assertTrue(any("venta de 9 acciones que tienes" in x for x in res["resultados"][1]["info"]))
+        self.assertTrue(any("vendes 9 acciones de TSLA" in x for x in res["resultados"][1]["info"]))
         os.remove(os.path.join(self.kemet, "portfolio.json"))
-        self.ordenes([dict(CIERRE_TSLA, cierre=True)])         # sin cartera, "cierre": true lo declara
+        self.ordenes([dict(CIERRE_TSLA, cierre=True)])         # sin cartera, "cierre": true lo declara (con el aviso de mirar la posición)
         code, res = self.check("2026-11-11 15:58")
         self.assertEqual(code, 0)
         self.assertEqual(res["resultados"][0]["clase"], "cierre")
+        self.assertTrue(any("get_open_position" in x for x in res["resultados"][0]["avisos"]))
         self.ordenes([CIERRE_TSLA])                            # sin cartera y sin declararlo, vender es un corto
         code, res = self.check("2026-11-11 15:50")
         self.assertEqual(code, 1)
@@ -405,7 +406,7 @@ class Acciones(Base):
         self.ordenes([dict(ORDEN_TSLA, qty=9)])
         code, res = self.check("2026-11-11 10:15")
         self.assertEqual(code, 0)
-        self.assertTrue(any("qty va como texto" in a for a in res["resultados"][0]["avisos"]))
+        self.assertTrue(any("qty va como número" in a for a in res["resultados"][0]["avisos"]))
         comun.escribir_json(os.path.join(self.kemet, "config.json"), CONFIG)   # la cuenta de firma no sirve para acciones
         self.ordenes([ORDEN_TSLA])
         code, res = self.check("2026-11-11 10:15")

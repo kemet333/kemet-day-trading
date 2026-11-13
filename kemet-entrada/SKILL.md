@@ -1,7 +1,7 @@
 ---
 name: kemet-entrada
 description: >-
-  El momento de la entrada. Vigila vela a vela la ruptura del balance inicial
+  La regla de entrada, vela a vela. Vigila la ruptura del balance inicial
   en futuros (ES, NQ, CL, GC) y en acciones de EE. UU. (TSLA, AAPL, cualquier
   ticker): construye el IB con la primera hora de la sesión regular (los
   primeros 15 minutos en una acción; también 30), espera a que cierre cada vela de 5 minutos de
@@ -116,7 +116,7 @@ A las 10:45 la vela de 10:40 ha cerrado en 28.429,75, por encima del IB alto (`c
 NQ, miércoles 11/11/2026, 16:45 Madrid / 10:45 NY · ruptura del IB de 60 minutos sobre velas de 5 minutos de Yahoo (gratis, unos 10 minutos de retraso)
 IB 09:30 a 10:30: alto 28.426, bajo 28.199, 227 puntos (12 velas), medio 28.312,50.
 DISPARADO largo a las 10:45 NY en 28.429,75: la vela de 10:40 (barra 15) cerró en 28.429,75, por encima del IB alto 28.426.
-Este es el momento de la entrada, si la tomas. No se ha enviado ninguna orden.
+La regla escrita se acaba de cumplir; es una regla, no una recomendación. No se ha enviado ninguna orden.
 Siguiente: stop y objetivo antes de pulsar nada, con kemet-salida (salida.py plan).
 ```
 
@@ -159,7 +159,7 @@ A las 10:15 la vela de 10:10 ha cerrado en 393,08, por encima del IB alto:
 TSLA, miércoles 11/11/2026, 16:15 Madrid / 10:15 NY · ruptura del IB de 15 minutos sobre velas de 5 minutos de Yahoo (gratis, puede ir con retraso)
 IB 09:30 a 09:45: alto 392,67, bajo 386,35, 6,32 $ (3 velas), medio 389,51.
 DISPARADO largo a las 10:15 NY en 393,08: la vela de 10:10 (barra 9) cerró en 393,08, por encima del IB alto 392,67.
-Este es el momento de la entrada, si la tomas. No se ha enviado ninguna orden.
+La regla escrita se acaba de cumplir; es una regla, no una recomendación. No se ha enviado ninguna orden.
 Siguiente: stop y objetivo antes de pulsar nada, con kemet-salida (salida.py plan).
 ```
 

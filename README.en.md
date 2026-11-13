@@ -51,7 +51,7 @@ cp -r kemet-day-trading/kemet-* ~/.claude/skills/
 ```
 
 For one project, the same folders in your repo's `.claude/skills/`. On Claude.ai or the Claude app: download the
-zip from [kemet-capital.com/skill](https://kemet-capital.com/skill) and upload it under Settings, Capabilities,
+zip from [kemet-capital.com/skill](https://www.kemet-capital.com/skill/) and upload it under Settings, Capabilities,
 Skills: it is the whole pack as one skill. No Claude Code and no skills? Paste any `SKILL.md` at the top of a chat
 and it runs as a method; you lose the Python tools, not the rules.
 
@@ -106,7 +106,7 @@ All standard-library Python, polite with the free endpoints (one request every h
 
 ```bash
 python3 kemet-scanner/scanner.py universo                              # -> kemet/universo.txt (~5,900 US stocks)
-python3 kemet-scanner/scanner.py diario                                # pre-market setups -> kemet/watchlist.json
+python3 kemet-scanner/scanner.py diario                                # daily-close setups before the open -> kemet/watchlist.json
 python3 kemet-scanner/scanner.py orb --a 10:15                         # opening-range breakouts so far
 python3 kemet-scanner/scanner.py futuros                               # the twelve contracts
 python3 kemet-noticias/noticias.py --tickers TSLA --horas 12           # headlines, 8-Ks, today's move, macro calendar
@@ -147,7 +147,7 @@ evaluations you do not pass. Decide for yourself, and talk to a licensed profess
 **No order without your yes.** Only `/kemet-broker` can lead to an order, and only after `/kemet-riesgo` passes
 that exact order and you type yes for that ticket in the chat. Set the broker tool to "Needs approval" in Claude,
 never "Always allow", so Claude's own card is a second check. Paper account by default (`"papel": true`); keys
-live in environment variables, never in the chat. There is no free futures connector: futures orders you place
+live in the connector config file (its `env` block), never in the chat. There is no free futures connector: futures orders you place
 yourself on your platform. Kemet Capital runs, with agents on its own platform, systems whose filters and
 parameters were validated on its own bench; that is a different product and it is not here.
 

@@ -28,6 +28,7 @@ import argparse
 import csv
 import datetime as dt
 import io
+import re
 import json
 import os
 import sys
@@ -74,36 +75,97 @@ def _norm(s):
     return s.strip().lower().replace(" ", "_")
 
 
-def _f(x):
-    """'28.426,25' -> 28426.25 · '28426.25' -> 28426.25 · '' -> None."""
-    if x is None:
+MILES_EEUU = re.compile(r"^\(?-?\d{1,3}(,\d{3})+(\.\d+)?\)?$")     # 26,812 · 1,234.50: coma de miles
+MILES_ES = re.compile(r"^\(?-?\d{1,3}(\.\d{3})+(,\d+)?\)?$")       # 26.812 · 1.234,50: punto de miles
+
+
+def _limpio(x):
+    s = str(x if x is not None else "").strip().replace("$", "").replace("€", "").replace(" ", "").replace("\u00a0", "")
+    return "" if s.lower() in ("", "-", "\u2014", "na", "n/a", "none", "null") else s
+
+
+def estilo_de(valores):
+    """«punto» (EE. UU.: 1,234.50) o «coma» (España: 1.234,50) según las cifras del archivo; None si ninguna lo decide."""
+    eeuu = es = 0
+    for x in valores:
+        s = _limpio(x)
+        if "," in s and "." in s:
+            if s.rfind(".") > s.rfind(","):
+                eeuu += 1
+            else:
+                es += 1
+        elif "," in s and not MILES_EEUU.match(s):
+            es += 1                                      # 1,5 · 28426,25: coma decimal
+        elif "." in s and not MILES_ES.match(s):
+            eeuu += 1                                    # 393.10: punto decimal
+    if eeuu and not es:
+        return "punto"
+    if es and not eeuu:
+        return "coma"
+    return None
+
+
+def _f(x, estilo=None):
+    """'28.426,25' -> 28426.25 · '28426.25' -> 28426.25 · '26,812' -> 26812 en un archivo de EE. UU. · '(120)' -> -120 · '' -> None."""
+    s = _limpio(x)
+    if not s:
         return None
-    s = str(x).strip().replace("$", "").replace("€", "").replace(" ", "")
-    if not s or s in ("-", "\u2014", "na", "n/a", "none", "null"):
-        return None
+    negativo = s.startswith("(") and s.endswith(")")
+    s = s.strip("()")
     if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".") if s.rfind(",") > s.rfind(".") else s.replace(",", "")
     elif "," in s:
-        s = s.replace(",", ".")
+        s = s.replace(",", "") if (estilo == "punto" and MILES_EEUU.match(s)) else s.replace(",", ".")
+    elif "." in s and estilo == "coma" and MILES_ES.match(s):
+        s = s.replace(".", "")
     try:
-        return float(s)
+        v = float(s)
     except ValueError:
         return None
+    return -v if negativo else v
 
 
-def _fecha(x):
+FECHA_BARRA = re.compile(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})")
+
+
+def orden_de_fechas(valores):
+    """«dmy» o «mdy» para las fechas con barra del archivo (11/02/2026); None si ninguna lo decide (todas con día ≤ 12)."""
+    dmy = mdy = False
+    for x in valores:
+        m = FECHA_BARRA.match(str(x or "").strip())
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            dmy = dmy or a > 12
+            mdy = mdy or b > 12
+    if dmy and mdy:
+        raise KemetError("las fechas del CSV mezclan día/mes y mes/día: pasa --fechas dmy o --fechas mdy")
+    return "dmy" if dmy else ("mdy" if mdy else None)
+
+
+def _fecha(x, orden="dmy"):
     s = str(x or "").strip()
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d/%m/%y"):
+    m = FECHA_BARRA.match(s)
+    if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y = y + 2000 if y < 100 else y
+        d, mes = (a, b) if orden != "mdy" else (b, a)
         try:
-            return dt.datetime.strptime(s[:10] if fmt.startswith("%Y") else s, fmt).date()
+            return dt.date(y, mes, d)
+        except ValueError:
+            return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return dt.datetime.strptime(s[:10], fmt).date()
         except ValueError:
             pass
     return None
 
 
 def _hora(x):
-    s = str(x or "").strip()
-    for fmt in ("%H:%M", "%H:%M:%S", "%H.%M"):
+    s = str(x or "").strip().upper().replace(".", "") if re.search(r"[AP]\.?M", str(x or ""), re.I) else str(x or "").strip()
+    if " " in s and re.match(r"^\d{4}-\d{2}-\d{2} ", s):      # fecha y hora en la misma columna
+        s = s.split(" ", 1)[1]
+    for fmt in ("%H:%M", "%H:%M:%S", "%H.%M", "%I:%M %p", "%I:%M:%S %p", "%I:%M%p"):
         try:
             return dt.datetime.strptime(s, fmt).time().replace(second=0)
         except ValueError:
@@ -121,9 +183,14 @@ def madrid_a_ny(fecha, hora):
 def contrato_de(simbolo):
     """(código, es_micro, valor del punto) para MNQ, NQ, MNQZ6, NQZ26… o un ticker de EE. UU. (TSLA: 1 $ por acción); None si no lo conoce."""
     s = str(simbolo or "").strip().upper().replace(" ", "")
-    candidatos = [s, s.rstrip("0123456789")]
-    if candidatos[-1] and candidatos[-1][-1] in "FGHJKMNQUVXZ" and len(candidatos[-1]) > 2:
-        candidatos.append(candidatos[-1][:-1])
+    candidatos = [s]
+    # la letra del mes solo se quita si detrás va el año (MNQZ6, NQZ26): CLF, SIG o HGV son acciones, no CL, SI o HG
+    m = re.match(r"^([A-Z0-9]*?[A-Z])(\d{1,4})$", s)
+    if m:
+        base = m.group(1)
+        for c in (base, base[:-1] if base[-1] in "FGHJKMNQUVXZ" else None):
+            if c and (c in comun.CONTRATOS or c in comun.MICRO_A_CODIGO):
+                candidatos.append(c)
     for c in candidatos:
         if c in comun.MICRO_A_CODIGO:
             k = comun.MICRO_A_CODIGO[c]
@@ -155,7 +222,7 @@ def mapear_columnas(cabecera):
     return out
 
 
-def leer_csv(ruta):
+def leer_csv(ruta, decimal=None, fechas=None):
     """Lee el CSV y devuelve (operaciones, avisos). Cada operación es un dict con las cifras ya en números."""
     try:
         with open(ruta, encoding="utf-8-sig") as fh:
@@ -173,15 +240,49 @@ def leer_csv(ruta):
         raise KemetError("al CSV le faltan columnas: %s (cabecera leída: %s). `diario.py plantilla` imprime la cabecera esperada"
                          % (", ".join(faltan), ", ".join(filas[0])))
     ops, avisos = [], []
+
+    def columna(campo):
+        i = col.get(campo)
+        return [f[i] for f in filas[1:] if i is not None and i < len(f)]
+    estilo = decimal or estilo_de(sum((columna(c) for c in ("entrada", "salida", "stop", "pnl", "contratos")), []))
+    orden = fechas or orden_de_fechas(columna("fecha"))
+    if orden is None and any(FECHA_BARRA.match(str(x).strip()) for x in columna("fecha")):
+        orden = "mdy" if estilo == "punto" else "dmy"
+        avisos.append("las fechas con barra no dicen si son día/mes o mes/día: las leo como %s (%s); si no es así, pasa --fechas %s"
+                      % ("mes/día" if orden == "mdy" else "día/mes", "las cifras son de EE. UU." if estilo == "punto" else "formato español",
+                         "dmy" if orden == "mdy" else "mdy"))
+    if estilo is None:
+        # «26,812» en NQ: con coma decimal (26,812) no cae en el tick de 0,25; con coma de miles (26.812) sí. Un precio así decide el archivo.
+        for fila in filas[1:]:
+            i = col.get("simbolo")
+            ct = contrato_de(fila[i]) if i is not None and i < len(fila) else None
+            if not ct:
+                continue
+            try:
+                tick = comun.resolver(ct[0])["tick"] if ct[2] != 1.0 else 0.01
+            except KemetError:
+                continue
+            for c in ("entrada", "salida", "stop"):
+                j = col.get(c)
+                s = _limpio(fila[j]) if j is not None and j < len(fila) else ""
+                if MILES_EEUU.match(s) and "." not in s:
+                    dec, miles = float(s.replace(",", ".")), float(s.replace(",", ""))
+                    en_tick = lambda x: abs(x / tick - round(x / tick)) < 1e-6
+                    if en_tick(miles) and not en_tick(dec):
+                        estilo = "punto"
+        if estilo == "punto":
+            avisos.append("leo las comas como separador de miles (formato de EE. UU.): algún precio no cae en el tick del contrato con coma decimal; si no es así, pasa --decimal coma")
+    if estilo is None and any(MILES_EEUU.match(_limpio(x)) for c in ("entrada", "salida", "stop", "pnl") for x in columna(c)):
+        avisos.append("hay cifras como «1,234» que pueden ser miles (EE. UU.) o decimales (España): las leo con coma decimal; si tu exportación es de EE. UU., pasa --decimal punto")
     for n, fila in enumerate(filas[1:], 2):
         def v(campo):
             i = col.get(campo)
             return fila[i].strip() if i is not None and i < len(fila) else ""
-        fecha, hora = _fecha(v("fecha")), _hora(v("hora"))
+        fecha, hora = _fecha(v("fecha"), orden), _hora(v("hora"))
         ct = contrato_de(v("simbolo"))
         lado = LADOS.get(_norm(v("lado")))
-        entrada, salida, stop, pnl = _f(v("entrada")), _f(v("salida")), _f(v("stop")), _f(v("pnl"))
-        contratos = _f(v("contratos"))
+        entrada, salida, stop, pnl = _f(v("entrada"), estilo), _f(v("salida"), estilo), _f(v("stop"), estilo), _f(v("pnl"), estilo)
+        contratos = _f(v("contratos"), estilo)
         if fecha is None or hora is None or not ct or not lado or entrada is None:
             avisos.append("línea %d descartada: fecha, hora, símbolo, lado o entrada ilegibles (%s)" % (n, sep.join(fila)[:60]))
             continue
@@ -189,7 +290,16 @@ def leer_csv(ruta):
             ny = madrid_a_ny(fecha, hora)
             fecha, hora = ny.date(), ny.time()
         codigo, es_micro, punto = ct
-        contratos = int(contratos) if contratos and contratos > 0 else 1
+        if contratos is None:
+            contratos = 1
+            if "contratos" in col:
+                avisos.append("línea %d: cantidad ilegible (%r), cuento 1" % (n, v("contratos")))
+        elif contratos == 0:
+            avisos.append("línea %d descartada: cantidad 0" % n)
+            continue
+        elif contratos < 0 or contratos != int(contratos):
+            avisos.append("línea %d: cantidad %s, cuento %d" % (n, v("contratos"), max(1, int(abs(contratos)))))
+        contratos = max(1, int(abs(contratos)))
         if pnl is None:
             if salida is None:
                 avisos.append("línea %d: sin pnl ni salida, resultado desconocido" % n)
@@ -291,7 +401,9 @@ def revisar(ops, cfg=None, agenda=None, stop_habitual=None):
     # por día
     dias = {}
     for o in ops:
-        dias.setdefault(o["fecha"], []).append(o)
+        # un futuro cuenta en su sesión de CME (empieza a las 18:00 NY): tres pérdidas de 23:40 a 01:10 son del mismo día
+        dia = o["fecha"] if o["punto"] == 1.0 else comun.dia_negociacion(dt.datetime.combine(o["fecha"], o["hora"]))
+        dias.setdefault(dia, []).append(o)
     resumen_dias = []
     for f in sorted(dias):
         lista = dias[f]
@@ -565,7 +677,7 @@ def informe(doc, ruta, ahora_utc, avisos):
 
 def cmd_revisar(a):
     ahora = comun.parse_ahora(a.ahora)
-    ops, avisos = leer_csv(a.csv)
+    ops, avisos = leer_csv(a.csv, a.decimal, a.fechas)
     desde = _fecha(a.desde) if a.desde else None
     hasta = _fecha(a.hasta) if a.hasta else None
     if a.desde and not desde or a.hasta and not hasta:
@@ -598,6 +710,8 @@ def main(argv=None):
     p.add_argument("csv")
     p.add_argument("--desde", help="AAAA-MM-DD")
     p.add_argument("--hasta", help="AAAA-MM-DD")
+    p.add_argument("--decimal", choices=["coma", "punto"], help="separador decimal de las cifras si el archivo no lo deja claro (punto: exportación de EE. UU.)")
+    p.add_argument("--fechas", choices=["dmy", "mdy"], help="orden de las fechas con barra si el archivo no lo deja claro (mdy: EE. UU.)")
     p.add_argument("--stop-habitual", dest="stop_habitual", type=float, help="stop en puntos que supone para las operaciones sin stop (solo métricas)")
     p.add_argument("--ahora", help="hora de Nueva York, AAAA-MM-DD HH:MM (solo para la cabecera)")
     p.add_argument("--json", action="store_true")

@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-11",
+ "updated": "2026-11-13",
  "note": "Reglas tomadas de las webs oficiales de cada firma. Pueden cambiar: confírmalas en tu panel.",
  "firms": [
   {
@@ -970,8 +970,8 @@
   {
    "id": "apex",
    "name": "Apex Trader Funding",
-   "checked": "30/10/2026",
-   "source": "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/eod-evaluations/",
+   "checked": "13/11/2026",
+   "source": "https://apextraderfunding.com/help-center/additional-helpful-items/position-sizing-evaluation/",
    "accounts": [
     {
      "id": "eod-eval-25",
@@ -996,15 +996,16 @@
      "max_loss": 1000,
      "max_loss_type": "eod_trailing",
      "daily_loss_limit": 500,
-     "max_mini": 4,
-     "max_micro": 40,
+     "max_mini": 1,
+     "max_micro": 10,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 25K llega a 2 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "eod-eval-50",
@@ -1013,8 +1014,8 @@
      "max_loss": 2000,
      "max_loss_type": "eod_trailing",
      "daily_loss_limit": 1000,
-     "max_mini": 10,
-     "max_micro": 100,
+     "max_mini": 6,
+     "max_micro": 60,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
@@ -1029,15 +1030,16 @@
      "max_loss": 2000,
      "max_loss_type": "eod_trailing",
      "daily_loss_limit": 1000,
-     "max_mini": 10,
-     "max_micro": 100,
+     "max_mini": 2,
+     "max_micro": 20,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 50K llega a 4 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "eod-eval-100",
@@ -1046,8 +1048,8 @@
      "max_loss": 3000,
      "max_loss_type": "eod_trailing",
      "daily_loss_limit": 1500,
-     "max_mini": 14,
-     "max_micro": 140,
+     "max_mini": 8,
+     "max_micro": 80,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
@@ -1061,16 +1063,17 @@
      "phase": "funded",
      "max_loss": 3000,
      "max_loss_type": "eod_trailing",
-     "daily_loss_limit": 1500,
-     "max_mini": 14,
-     "max_micro": 140,
+     "daily_loss_limit": 1750,
+     "max_mini": 3,
+     "max_micro": 30,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 100K llega a 6 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "eod-eval-150",
@@ -1079,8 +1082,8 @@
      "max_loss": 4000,
      "max_loss_type": "eod_trailing",
      "daily_loss_limit": 2000,
-     "max_mini": 17,
-     "max_micro": 170,
+     "max_mini": 12,
+     "max_micro": 120,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
@@ -1094,16 +1097,17 @@
      "phase": "funded",
      "max_loss": 4000,
      "max_loss_type": "eod_trailing",
-     "daily_loss_limit": 2000,
-     "max_mini": 17,
-     "max_micro": 170,
+     "daily_loss_limit": 2500,
+     "max_mini": 4,
+     "max_micro": 40,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 150K llega a 10 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "intraday-eval-25",
@@ -1126,15 +1130,17 @@
      "phase": "funded",
      "max_loss": 1000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 4,
-     "max_micro": 40,
+     "daily_loss_limit": 500,
+     "max_mini": 1,
+     "max_micro": 10,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 25K llega a 2 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/intraday-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "intraday-eval-50",
@@ -1142,8 +1148,8 @@
      "phase": "evaluation",
      "max_loss": 2000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 10,
-     "max_micro": 100,
+     "max_mini": 6,
+     "max_micro": 60,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
@@ -1157,15 +1163,17 @@
      "phase": "funded",
      "max_loss": 2000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 10,
-     "max_micro": 100,
+     "daily_loss_limit": 1000,
+     "max_mini": 2,
+     "max_micro": 20,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 50K llega a 4 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/intraday-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "intraday-eval-100",
@@ -1173,8 +1181,8 @@
      "phase": "evaluation",
      "max_loss": 3000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 14,
-     "max_micro": 140,
+     "max_mini": 8,
+     "max_micro": 80,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
@@ -1188,15 +1196,17 @@
      "phase": "funded",
      "max_loss": 3000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 14,
-     "max_micro": 140,
+     "daily_loss_limit": 1750,
+     "max_mini": 3,
+     "max_micro": 30,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 100K llega a 6 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/intraday-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     },
     {
      "id": "intraday-eval-150",
@@ -1204,8 +1214,8 @@
      "phase": "evaluation",
      "max_loss": 4000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 17,
-     "max_micro": 170,
+     "max_mini": 12,
+     "max_micro": 120,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
@@ -1219,15 +1229,17 @@
      "phase": "funded",
      "max_loss": 4000,
      "max_loss_type": "intraday_trailing",
-     "max_mini": 17,
-     "max_micro": 170,
+     "daily_loss_limit": 2500,
+     "max_mini": 4,
+     "max_micro": 40,
      "flat_by": {
       "time": "16:59",
       "tz": "America/New_York"
      },
      "news": "permitido",
-     "consistency": "mejor día ≤ 50% del beneficio para cobrar",
-     "note": "Sin cuota de activación en la variante «Sin activación»; mismas reglas. Comprueba tu tope de contratos en el panel de Apex"
+     "consistency": "mejor día por debajo del 50% del beneficio para cobrar (50% o más no vale)",
+     "note": "Contratos y límite diario del nivel 1 de escalado de la PA: suben con el saldo de cierre (la 150K llega a 10 minis). Mira tu nivel de hoy en el panel de Apex y usa ese.",
+     "source": "https://apextraderfunding.com/help-center/intraday-trailing-drawdown-accounts/scaling-levels-pa-explained/"
     }
    ]
   }

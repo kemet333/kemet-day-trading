@@ -25,7 +25,7 @@ geometría bien elegida no cambia eso; cambia cuánto cuesta cada intento y cuá
 | archivo | qué |
 | --- | --- |
 | `${CLAUDE_SKILL_DIR}/geometria-de-riesgo.md` | el estudio: la apuesta, cuánto arriesgar, qué cuenta, cuándo retirar, la lista |
-| `../kemet-tamano/reglas-de-firmas.md` | drawdown, límite diario, contratos, hora límite, consistencia y retiros por cuenta, con fecha |
+| `../kemet-tamano/reglas-de-firmas.md` | drawdown, límite diario, contratos, hora límite y consistencia por cuenta, con fecha. Precio, objetivo y reglas de retiro no están: se leen con el usuario en la web de la firma |
 | `kemet/config.json` | si existe: la cuenta del usuario, su fase y su límite del día |
 
 ## El método, en orden
@@ -43,7 +43,8 @@ geometría bien elegida no cambia eso; cambia cuánto cuesta cada intento y cuá
    día, stop y objetivo iguales, fuera de las ventanas de datos. Esto es una decisión del usuario: el pack, por
    defecto, aplica la regla Kemet para quien empieza (un cuarto del drawdown al día, dividido entre tres), que
    es más prudente; si elige la geometría de evaluación, la fija él en `kemet/config.json` con
-   `tamano.py config --perdida-dia`.
+   `tamano.py config --perdida-dia` igual a tres veces su riesgo por operación, siempre por debajo del límite
+   diario de la firma (si no cabe, esa geometría no vale en esa cuenta).
 4. **En cuenta financiada, lo contrario.** Se cobra pronto y se saca casi todo: en cuanto se cumplen los días
    ganadores, el retiro máximo que la firma permita, dejando dentro solo lo que obliguen. Cuanto más se deja,
    más tarda el siguiente retiro y menos veces se cobra, porque la cuenta se quema igual.
@@ -53,8 +54,9 @@ geometría bien elegida no cambia eso; cambia cuánto cuesta cada intento y cuá
 ## Pasos con el usuario
 
 1. Pide bankroll, firma (si ya la tiene) y si busca evaluación o fondeo directo.
-2. Con `reglas-de-firmas.md`, pon en una tabla dos o tres cuentas: precio, drawdown, objetivo si lo hay, tope por
-   retiro, cuántos intentos paga su bankroll. Señala la de mejor cociente objetivo/drawdown que su bankroll aguanta
+2. Con `reglas-de-firmas.md` (drawdown, límite diario, contratos) y la web de la firma, abierta con el usuario
+   (precio, objetivo, tope por retiro; si no lo habéis leído hoy, no lo sabes), pon en una tabla dos o tres
+   cuentas y cuántos intentos paga su bankroll. Señala la de mejor cociente objetivo/drawdown que su bankroll aguanta
    al menos dos o tres veces.
 3. Da el riesgo por operación en dólares y en puntos de su contrato para la fase en la que está, y lo que eso
    significa en micros con `../kemet-tamano/tamano.py calc` si tiene stop habitual.
@@ -67,12 +69,14 @@ geometría bien elegida no cambia eso; cambia cuánto cuesta cada intento y cuá
 
 ## Ejemplo
 
-Usuario: «Tengo 500 dólares y quiero empezar con Apex.» Apex 50K EOD (código público) cuesta decenas de dólares
-al mes y paga hasta 1.500 por retiro: el bankroll compra varios intentos. Objetivo 3.000 sobre un drawdown de
-2.500 (1,2 veces). Riesgo de evaluación al 15 % del drawdown: 375 dólares por operación; con un stop de 18
-puntos en NQ son 187,50 dólares por MNQ, así que caben 2 micros (el tope de la cuenta en micros manda si es
-menor). Con la regla Kemet del día en su lugar: 625 al día, 208 por operación, 1 micro. Las dos son legítimas;
-una es un billete, la otra es aprender sin quemarlo. El usuario elige, sabiendo cuál es cuál. Las cifras de la
+Usuario: «Tengo 500 dólares y quiero empezar con Apex.» Apex 50K EOD evaluación: drawdown 2.000, límite diario
+1.000 y 6 minis o 60 micros (`reglas-de-firmas.md`, 13/11/2026). El precio y el objetivo se leen con él en la web
+de Apex: con un objetivo de 3.000, el cociente es 1,5 veces el drawdown. Riesgo de evaluación al 15 % del
+drawdown: 300 dólares por operación; con un stop de 18 puntos en NQ, un MNQ arriesga 18 × 2 = 36 dólares, así
+que caben 8 micros (el tope de la cuenta manda si es menor). Se fija con `tamano.py config --firma apex --cuenta
+eod-eval-50 --perdida-dia 900` (tres operaciones de 300, por debajo de los 1.000 de la firma). Con la regla Kemet
+del día en su lugar: 500 al día, 166,67 por operación, 4 micros. Las dos son legítimas; una es un billete, la
+otra es aprender sin quemarlo. El usuario elige, sabiendo cuál es cuál. Las cifras de la
 cuenta se confirman en el panel de Apex antes de pagar: las firmas las cambian.
 
 ## Reglas

@@ -50,7 +50,7 @@ cp -r kemet-day-trading/kemet-* ~/.claude/skills/
 ```
 
 Para un solo proyecto, las mismas carpetas en `.claude/skills/` de tu repo. En Claude.ai o la app de Claude:
-descarga el zip de [kemet-capital.com/skill](https://kemet-capital.com/skill) y súbelo en Ajustes, Capacidades,
+descarga el zip de [kemet-capital.com/skill](https://www.kemet-capital.com/skill/) y súbelo en Ajustes, Capacidades,
 Skills: es el pack entero como una sola skill. Sin Claude Code ni skills, pega cualquier `SKILL.md` al principio
 de un chat y funciona como método; pierdes las herramientas de Python, no las reglas.
 
@@ -61,7 +61,7 @@ Hace falta Python 3.8 o más nuevo. Nada que instalar con pip. Funciona en Mac, 
 | comando | qué es | qué hace |
 | --- | --- | --- |
 | `/kemet-desk` | El desk | Te sitúa (mercado, cuenta, stop, horario), elige la pieza y las encadena en orden. |
-| `/kemet-scanner` | Scanner | Barre miles de acciones (universo de Nasdaq Trader) antes de abrir y a las 10:15, y los doce futuros: qué rompió, qué está sobre el máximo de ayer. |
+| `/kemet-scanner` | Scanner | Barre miles de acciones (universo de Nasdaq Trader) antes de abrir y a las 10:15, con cierres diarios y el rango de apertura, y los doce futuros con su balance inicial y el máximo y mínimo de ayer. |
 | `/kemet-noticias` | Noticias | Titulares y filings 8-K por ticker con hora y etiqueta, y la agenda macro del día, en un solo sitio. |
 | `/kemet-niveles` | Niveles | Máximo, mínimo y cierre de ayer, rango nocturno, apertura y balance inicial, y dónde está el precio. |
 | `/kemet-plan` | Plan de sesión | El plan escrito: franjas, ventanas de datos en las que no se opera, semáforo, niveles, tamaño, hora límite de tu firma. |
@@ -170,7 +170,7 @@ pagar evaluaciones que no apruebes. Decide tú y, si necesitas consejo, busca a 
 **Ninguna orden sin tu sí.** Solo `/kemet-broker` puede llevar a una orden, y solo después de que `/kemet-riesgo`
 pase esa orden exacta y tú escribas sí para ese ticket en el chat. Pon la herramienta del bróker en «Necesita
 aprobación» en Claude, nunca en «Permitir siempre», para que la tarjeta de Claude sea un segundo control. Cuenta
-papel por defecto (`"papel": true`); las claves van en variables de entorno, nunca en el chat. En futuros no hay
+papel por defecto (`"papel": true`); las claves van en el archivo de configuración del conector (su bloque `env`), nunca en el chat. En futuros no hay
 conector gratuito: la operación la pones tú en tu plataforma. Kemet Capital opera con agentes, en su plataforma,
 sistemas con filtros y parámetros validados en su propio banco; eso es otro producto y no está aquí.
 

@@ -40,6 +40,7 @@ Código de salida 0 si todo salió, 1 si alguna empresa falló y otra no, 2 si h
 import argparse
 import datetime as dt
 import gzip
+import http.client
 import json
 import os
 import re
@@ -122,6 +123,8 @@ class Edgar(object):
             raise KemetError("la SEC respondió HTTP %s en %s" % (e.code, url))
         except urllib.error.URLError as e:
             raise KemetError("no llego a %s: %s" % (url, e.reason))
+        except (http.client.HTTPException, OSError) as e:      # conexión cortada, respuesta a medias, timeout
+            raise KemetError("la conexión con la SEC falló en %s: %s" % (url, e.__class__.__name__))
         try:
             return json.loads(datos.decode("utf-8"))
         except ValueError:
@@ -278,7 +281,7 @@ def analizar(companyfacts, trimestres=6, nombre=None):
     ing, neto = s["ingresos"], s["beneficio_neto"]
     if not ing and not neto:
         raise KemetError("los hechos XBRL no traen ingresos ni beneficio neto trimestrales")
-    fines = sorted(set(ing) | set(neto), reverse=True)[:trimestres]
+    fines = sorted(set(ing) | set(neto), reverse=True)[:trimestres + 4]     # cuatro más para el interanual corregido
     filas = []
     for fin in fines:
         r = ing.get(fin, {}).get("valor")
@@ -304,6 +307,9 @@ def analizar(companyfacts, trimestres=6, nombre=None):
             "bpa_interanual": variacion(bpa, (previo["bpa_diluido"] or {}).get("valor")),
             "presentado": base.get("presentado"), "formulario": base.get("formulario"),
         })
+    corregir_split(filas)
+    cuatro_bpa = [r.get("bpa_diluido") for r in filas[:4]]
+    filas = filas[:trimestres]
     ultimos = {}
     for clave in ("ingresos", "beneficio_neto", "bpa_diluido", "flujo_caja_operativo"):
         cuatro = sorted(s[clave])[-4:]
@@ -311,8 +317,43 @@ def analizar(companyfacts, trimestres=6, nombre=None):
             ultimos[clave] = sum(s[clave][e]["valor"] for e in cuatro)
     if "bpa_diluido" in ultimos:
         ultimos["bpa_diluido"] = round(ultimos["bpa_diluido"], 2)
+        if len(cuatro_bpa) == 4 and None not in cuatro_bpa:
+            ultimos["bpa_diluido"] = round(sum(cuatro_bpa), 2)        # con el BPA ya corregido alrededor de un split
     return {"entidad": nombre or companyfacts.get("entityName"), "cik": str(companyfacts.get("cik", "")).zfill(10),
             "trimestres": filas, "ultimos_4": ultimos, "conceptos": conceptos}
+
+
+def _acciones(fila):
+    """Acciones implícitas (beneficio neto / BPA) de un trimestre, o None si el BPA es demasiado pequeño para dividir."""
+    ni, bpa = fila.get("beneficio_neto"), fila.get("bpa_diluido")
+    if ni is None or bpa is None or abs(bpa) < 0.05 or not ni:
+        return None
+    return ni / bpa
+
+
+def corregir_split(filas, salto=1.6):
+    """Alrededor de un split la SEC mezcla BPA de antes y de después (el 10-K reexpresa el año; los 10-Q viejos no).
+    Si las acciones implícitas de un trimestre cambian más de `salto` veces frente a las de otro, el BPA no es comparable:
+    el interanual se quita y el de un trimestre derivado se recalcula con las acciones del trimestre real más cercano posterior."""
+    orden = sorted(filas, key=lambda r: r["fin"])
+    reales = [r for r in orden if not r["derivado"] and _acciones(r)]
+    for r in orden:
+        acc = _acciones(r)
+        if r["derivado"] and r.get("beneficio_neto") is not None:
+            despues = [x for x in reales if x["fin"] > r["fin"]] or list(reversed([x for x in reales if x["fin"] < r["fin"]]))
+            ref = _acciones(despues[0]) if despues else None
+            if ref and (acc is None or not (1 / salto <= acc / ref <= salto)):
+                r["bpa_diluido"] = round(r["beneficio_neto"] / ref, 2)
+                r["bpa_aproximado"] = True
+    for r in orden:
+        previo = next((x for x in orden if abs((_fecha(r["fin"]) - _fecha(x["fin"])).days - 365) <= 10), None)
+        if previo is not None:
+            r["bpa_interanual"] = variacion(r.get("bpa_diluido"), previo.get("bpa_diluido"))
+        a1, a0 = _acciones(r), (_acciones(previo) if previo else None)
+        if a1 and a0 and not (1 / salto <= a1 / a0 <= salto):
+            r["bpa_interanual"] = None              # un split entre medias: el BPA de hace un año está en otra escala
+            r["posible_split"] = True
+    return filas
 
 
 def etiqueta_fiscal(fp, fy):
@@ -387,6 +428,22 @@ def proximo_informe(submissions, informes, hoy, fp_ultimo=None):
     formulario = "10-K" if str(fp_ultimo or "").upper() in ("Q3", "T3") and ult["formulario"] == "10-Q" else "10-Q"
     if ult["formulario"] in ("10-K", "20-F", "40-F"):
         formulario = "10-Q"
+    # Lo que mueve el precio es la nota de resultados (8-K, punto 2.02), que suele salir días o semanas antes del 10-Q/10-K:
+    # se busca la del mismo trimestre del año pasado (presentada en los 75 días siguientes al cierre de ese periodo).
+    equivalente = objetivo - dt.timedelta(days=365)
+    recientes = _recientes(submissions)
+    # el 10-Q/10-K del mismo trimestre del año pasado: la nota de resultados es el último 2.02 antes de él (Tesla presenta
+    # también las entregas como 2.02 a principios de mes: el primero tras el cierre no sirve)
+    informe_eq = sorted((f for f in recientes if f["form"] in INFORMES and f["reportDate"]
+                         and abs((_fecha(f["reportDate"]) - equivalente).days) <= 12), key=lambda x: x["filingDate"])
+    tope = _fecha(informe_eq[0]["filingDate"]) if informe_eq else equivalente + dt.timedelta(days=75)
+    notas = [f for f in recientes if f["form"] == "8-K" and "2.02" in (f.get("items") or "")
+             and f["filingDate"] and equivalente < _fecha(f["filingDate"]) <= tope]
+    if notas:
+        f = sorted(notas, key=lambda x: x["filingDate"])[-1]
+        estimado = _fecha(f["filingDate"]) + dt.timedelta(weeks=52)
+        return {"formulario": "la nota de resultados (8-K, punto 2.02)", "estimado": estimado.isoformat(), "dias": (estimado - hoy).days,
+                "base": "la del mismo trimestre del año pasado salió el %s; el %s llega después" % (f["filingDate"], formulario), "estimacion": True}
     candidatos = []
     for f in _recientes(submissions):
         if f["form"] not in INFORMES or not f["reportDate"]:

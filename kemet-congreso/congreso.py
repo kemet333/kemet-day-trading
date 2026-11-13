@@ -61,17 +61,9 @@ PLAZO_DIAS = 45
 
 # ---------------------------------------------------------------- red
 
-def user_agent():
-    """El de kemet/config.json (`sec_user_agent`) o SEC_USER_AGENT si lo hay; si no, el genérico del pack."""
-    ua = (os.environ.get("SEC_USER_AGENT") or "").strip()
-    if not ua:
-        cfg = comun.leer_json("config.json", obligatorio=False) or {}
-        ua = str(cfg.get("sec_user_agent") or "").strip()
-    return ua if ua and "@" in ua else comun.UA
-
-
 def descargar(url, timeout=60):
-    req = urllib.request.Request(url, headers={"User-Agent": user_agent()})
+    # La Cámara no pide contacto: el nombre y el correo del User-Agent de la SEC se quedan para la SEC
+    req = urllib.request.Request(url, headers={"User-Agent": comun.UA})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read()
