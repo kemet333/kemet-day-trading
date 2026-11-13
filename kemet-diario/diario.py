@@ -401,7 +401,9 @@ def revisar(ops, cfg=None, agenda=None, stop_habitual=None):
     # por día
     dias = {}
     for o in ops:
-        dias.setdefault(o["fecha"], []).append(o)
+        # un futuro cuenta en su sesión de CME (empieza a las 18:00 NY): tres pérdidas de 23:40 a 01:10 son del mismo día
+        dia = o["fecha"] if o["punto"] == 1.0 else comun.dia_negociacion(dt.datetime.combine(o["fecha"], o["hora"]))
+        dias.setdefault(dia, []).append(o)
     resumen_dias = []
     for f in sorted(dias):
         lista = dias[f]
