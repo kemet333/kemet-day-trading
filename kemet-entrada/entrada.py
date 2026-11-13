@@ -312,7 +312,9 @@ def evaluar(codigo, ch, ahora_utc, cfg=None, ib_minutos=None):
         return res
     pend = res["retraso"]
     # una vela de antes del corte que Yahoo aún no ha enviado puede disparar: se espera hasta RETRASO_MAX_MIN después del corte
-    pendiente_util = pend and pend["cierra_ts"] <= ts_de_utc(corte) and ahora_utc < corte + dt.timedelta(minutes=RETRASO_MAX_MIN)
+    ultima_antes = ts_de_utc(corte) - PASO               # la vela que cierra justo en el corte
+    falta_ultima = (not rth or rth[-1][0] < ultima_antes) and ultima_antes >= ts_de_utc(cierre_ib)
+    pendiente_util = falta_ultima and ahora_utc < corte + dt.timedelta(minutes=RETRASO_MAX_MIN)
     if ahora_utc >= corte and not pendiente_util:
         res.update(estado="caducado", motivo="ninguna vela cerró por encima de %s ni por debajo de %s antes de las %s NY, la última hora para una entrada nueva%s"
                    % (pts(ib["alto"]), pts(ib["bajo"]), hhmm(a_ny(corte)), " (sesión recortada: %s)" % recortado if recortado else ""))

@@ -70,8 +70,10 @@ NO_TICKER = {"SI", "SÍ", "YES", "OK", "NY", "USD", "PASS"}
 PALABRAS_CON_SI = {"sí", "si", "yes", "claro", "adelante", "dale", "vale", "ok", "venga", "por", "favor", "gracias", "pon", "ponla", "ponlo",
                    "manda", "mándala", "mandala", "envía", "envia", "envíala", "enviala", "esa", "esta", "la", "las", "lo", "los", "el", "orden", "ticket",
                    "de", "a", "en", "con", "y", "acciones", "acción", "accion", "contratos", "contrato", "micros", "micro", "papel",
-                   "bracket", "mercado", "límite", "limite", "stop", "objetivo", "puntos", "dólares", "dolares", "usd", "riesgo", "entrada"}
-LADO_CON_SI = {"compra": {"compra", "comprar", "compro", "largo", "long", "buy"}, "venta": {"venta", "vende", "vender", "vendo", "sell", "cierra", "cierre"}}
+                   "bracket", "mercado", "límite", "limite", "stop", "objetivo", "puntos", "dólares", "dolares", "usd", "riesgo", "entrada",
+                   "confirmo", "confirmado", "confirmada", "ya", "perfecto", "perfecta", "listo", "correcto", "exacto", "hecho", "ponla", "adelante"}
+LADO_CON_SI = {"compra": {"compra", "comprar", "compro", "cómprala", "comprala", "largo", "long", "buy"},
+               "venta": {"venta", "vende", "vender", "vendo", "véndela", "vendela", "sell", "cierra", "cierre", "ciérrala", "cierrala", "ciérralo", "cierralo"}}
 
 
 # ---------------------------------------------------------------- utilidades
@@ -137,15 +139,24 @@ def por_que_de(orden):
     return orden.get("por_que") or orden.get("why") or ""
 
 
-def entrada_alpaca(orden):
+def entrada_alpaca(orden, fecha=None, intento=1):
     """Los argumentos exactos de place_stock_order: nombres de Alpaca, números como texto. `por_que` y `plan` nunca se envían.
-    Lleva un client_order_id con la huella: si la llamada se repite (un timeout, un reintento), Alpaca rechaza la segunda."""
+    Lleva un client_order_id con la huella, el día y el número de sí de hoy para esa orden: si la misma llamada se repite (un
+    timeout, un reintento), Alpaca rechaza la segunda; otro día, o después de otro sí, el id es otro."""
     out = {}
     for k in CAMPOS_ALPACA:
         if k in orden and orden[k] is not None:
             out[k] = _txt(orden[k]) if k in CAMPOS_TEXTO else orden[k]
-    out.setdefault("client_order_id", "kemet-" + huella(orden))
+    out.setdefault("client_order_id", "kemet-%s%s-%d" % (huella(orden), ("-" + str(fecha).replace("-", "")) if fecha else "", intento))
     return out
+
+
+def intento_de(estado, h, fecha):
+    """El número del sí que vale para esa orden hoy: el último aprobado si está pendiente de enviar, si no el siguiente."""
+    recs = [r for r in (estado or {}).get("ordenes", []) if r.get("huella") == h and str(r.get("fecha")) == fecha]
+    aprobadas = sum(1 for r in recs if r.get("estado") == "aprobada")
+    pendiente = bool(recs) and recs[-1].get("estado") == "aprobada"
+    return max(1, aprobadas if pendiente else aprobadas + 1)
 
 
 def es_bracket(orden):
@@ -302,7 +313,7 @@ def _numeros(texto):
             continue
         cand = set()
         if "," in s and "." in s:
-            cand.add(s.replace(".", "").replace(",", "."))
+            cand.add(s.replace(",", "") if s.rfind(".") > s.rfind(",") else s.replace(".", "").replace(",", "."))
         elif "," in s:
             cand.add(s.replace(",", "."))
         elif "." in s:
@@ -343,7 +354,8 @@ def es_un_si(respuesta, orden, simbolos_del_lote=()):
     otros = {str(s).upper() for s in simbolos_del_lote} - {sim}
     nombrados = tokens & otros
     # un ticker escrito en mayúsculas que no es el de la orden (AAPL en una orden de TSLA) tampoco vale
-    nombrados |= {x for x in re.findall(r"\b[A-Z]{2,5}(?:\.[A-Z])?\b", raw) if x != sim and x not in NO_TICKER}
+    if not raw.isupper():                    # «SÍ, PONLA» entero en mayúsculas no nombra ningún ticker
+        nombrados |= {x for x in re.findall(r"\b[A-Z]{2,5}(?:\.[A-Z])?\b", raw) if x != sim and x not in NO_TICKER}
     if nombrados:
         return False, "la respuesta nombra %s y esta orden es de %s" % (", ".join(sorted(nombrados)), sim)
     # cada cifra que escribe el usuario tiene que ser de esta orden (antes bastaba con que cuadrara una)
@@ -456,7 +468,7 @@ def render(orden, i, total, cfg, riesgo, estado, fecha):
         lineas.append("  aviso: " + w)
     if es_accion(orden):
         lineas.append("  Claude llamará a place_stock_order exactamente con:")
-        for l in json.dumps(entrada_alpaca(orden), indent=2, ensure_ascii=False).splitlines():
+        for l in json.dumps(entrada_alpaca(orden, fecha, intento_de(estado, huella(orden), fecha)), indent=2, ensure_ascii=False).splitlines():
             lineas.append("    " + l)
         if es_bracket(orden):
             lineas.append("  Alpaca pone la entrada y después el stop-loss y el take-profit como dos órdenes que se anulan entre sí:")
@@ -477,7 +489,7 @@ def ticket_json(orden, i, cfg, riesgo, estado, fecha):
     accion = es_accion(orden)
     return {"indice": i, "lista": lista, "estado": etiqueta, "llano": llano(orden), "huella": huella(orden),
             "instrumento": "accion" if accion else "futuro", "papel": bool(cfg.get("papel", True)),
-            "herramienta": "place_stock_order" if accion else None, "entrada_herramienta": entrada_alpaca(orden) if accion else None,
+            "herramienta": "place_stock_order" if accion else None, "entrada_herramienta": entrada_alpaca(orden, fecha, intento_de(estado, huella(orden), fecha)) if accion else None,
             "a_mano": not accion, "por_que": por_que_de(orden), "bracket": es_bracket(orden) if accion else None,
             "perdida_al_stop": perdida, "stop": stop, "riesgo_pts": riesgo_pts, "cierre": bool(orden.get("cierre"))}
 
@@ -558,8 +570,9 @@ def _reloj(a, ordenes=(), cfg=None):
     """(ahora, fecha, hora). La fecha es la de las reglas: el día de CME (desde las 18:00 NY) en futuros, el natural en acciones."""
     ahora = comun.parse_ahora(getattr(a, "ahora", None))
     ny = comun.a_ny(ahora)
-    acciones = any(es_accion(o) for o in ordenes) or (cfg or {}).get("tipo_cuenta") == "propia" or (cfg or {}).get("cuenta") == "propia"
-    fecha = ny.date() if (acciones or not ordenes) else comun.dia_negociacion(ny)
+    propia = (cfg or {}).get("tipo_cuenta") == "propia" or (cfg or {}).get("cuenta") == "propia"
+    acciones = any(es_accion(o) for o in ordenes) if ordenes else (propia or not cfg)
+    fecha = ny.date() if (acciones or propia) else comun.dia_negociacion(ny)
     return ahora, fecha.isoformat(), comun.hhmm(ny)
 
 
@@ -640,7 +653,7 @@ def cmd_aprobar(a):
     print("Apuntado tu sí para %s: %s." % (huella(o), llano(o)))
     if es_accion(o):
         print("Ahora llama a place_stock_order exactamente con:")
-        print(json.dumps(entrada_alpaca(o), indent=2, ensure_ascii=False))
+        print(json.dumps(entrada_alpaca(o, fecha, intento_de(estado, huella(o), fecha)), indent=2, ensure_ascii=False))
         print("La tarjeta de Claude dice Permitir una vez o Denegar. Después: broker.py registrar --huella %s --id-broker ID --precio PRECIO" % huella(o))
     else:
         print("Ponla tú en tu plataforma, con el stop puesto antes de confirmar. Después: riesgo.py registrar --abrir y broker.py registrar --huella %s --precio PRECIO" % huella(o))
@@ -675,7 +688,7 @@ def _buscar_orden(h, riesgo, estado, fecha):
 
 
 def cmd_registrar(a):
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, (), cargar_config())
     cfg = cargar_config()
     riesgo = comun.leer_json(comun.ruta(RIESGO), obligatorio=False)
     estado = cargar_estado()
@@ -765,7 +778,7 @@ def _registrar_suelto(a, cfg, estado, ahora, fecha, hora):
 
 
 def cmd_plano(a):
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, (), cargar_config())
     cfg = cargar_config()
     sim = a.simbolo.strip().upper()
     inst = comun.resolver(sim)
@@ -835,7 +848,7 @@ def cmd_plano(a):
 
 def cmd_hoy(a):
     estado = cargar_estado()
-    ahora, fecha, hora = _reloj(a)
+    ahora, fecha, hora = _reloj(a, (), cargar_config())
     filas = [r for r in estado.get("ordenes", []) if a.todo or str(r.get("fecha")) == fecha]
     if not filas:
         print("Nada apuntado%s." % ("" if a.todo else " hoy"))

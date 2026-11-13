@@ -311,10 +311,15 @@ def _comprobar_futuro(o, ctx):
     sim = str(o.get("simbolo") or "").strip().upper()
     lado = str(o.get("lado") or "").strip().lower()
     n = o.get("contratos")
-    cierre = bool(o.get("cierre")) and _cierra_algo(sim, lado, n if isinstance(n, int) else None, ctx["abiertas"])
-    if o.get("cierre") and not cierre:
-        avisos.append("marcada como cierre, pero en kemet/estado/dia.json no hay una operación abierta de %s del otro lado con %s contratos: "
-                      "la compruebo como entrada. Para cerrar una posición abierta fuera del pack no hace falta PASS: ciérrala en tu plataforma" % (sim, n))
+    cierre = bool(o.get("cierre"))
+    if cierre and not _cierra_algo(sim, lado, n if isinstance(n, int) else None, ctx["abiertas"]):
+        # cerrar una posición que el pack no conoce no se bloquea, pero no puede ser más grande que lo que la cuenta deja abrir
+        ct0 = contrato_de(sim)
+        tope = (c.get("max_mini") if (ct0 and (not ct0[1] or comun.sin_micro(ct0[0]))) else c.get("max_micro")) if ct0 else None
+        if tope and isinstance(n, int) and n > int(tope):
+            motivos.append("cierre: %d %s, más que el tope de %d de tu cuenta; no puedes tener abiertos más de esos" % (n, sim, int(tope)))
+        avisos.append("cierre de %s %s que no está en kemet/estado/dia.json ni en kemet/portfolio.json: comprueba en tu plataforma que esa posición existe; "
+                      "si no, esta orden abre una nueva" % (n, sim))
     precio, stop, objetivo = _f(o.get("precio")), _f(o.get("stop")), _f(o.get("objetivo"))
     ct = contrato_de(sim)
     if not ct:
@@ -329,7 +334,7 @@ def _comprobar_futuro(o, ctx):
         motivos.append("formato: precio tiene que ser un número mayor que 0, no %r" % o.get("precio"))
     globex, motivo_globex = ctx["globex"]
     if globex != "abierto":
-        motivos.append("globex: %s (%s), %s NY" % (globex, motivo_globex, comun.hhmm(t)))
+        (avisos if o.get("cierre") else motivos).append("globex: %s (%s), %s NY" % (globex, motivo_globex, comun.hhmm(t)))
     mercado, es_micro, punto = ct if ct else (None, True, 0.0)
     if ct and mercado != ctx["mercado_cfg"] and cfg:
         avisos.append("la orden es de %s y la config de %s: compruebo con las reglas de la cuenta y las ventanas de %s" % (mercado, ctx["mercado_cfg"], mercado))
@@ -345,10 +350,11 @@ def _comprobar_futuro(o, ctx):
         elif (largo and stop >= precio) or (not largo and stop <= precio):
             luego.append("stop: el stop %s tiene que estar %s de la entrada %s en una %s" % (pts(stop), "debajo" if largo else "encima", pts(precio), lado))
         else:
-            riesgo_pts = _riesgo_al_tick(abs(precio - stop), comun.CONTRATOS[mercado]["tick"])
+            tick = comun.tick_de(mercado, es_micro)
+            riesgo_pts = _riesgo_al_tick(abs(precio - stop), tick)
             perdida = round(n * riesgo_pts * punto, 2)
-            if abs(precio - stop) < comun.CONTRATOS[mercado]["tick"] - 1e-9:
-                luego.append("stop: a menos de un tick (%s) de la entrada; un stop así no existe en la plataforma" % pts(comun.CONTRATOS[mercado]["tick"]))
+            if abs(precio - stop) < tick - 1e-9:
+                luego.append("stop: a menos de un tick (%s) de la entrada; un stop así no existe en la plataforma" % pts(tick))
             if objetivo is not None and ((largo and objetivo <= precio) or (not largo and objetivo >= precio)):
                 luego.append("objetivo: el objetivo %s tiene que estar %s de la entrada %s" % (pts(objetivo), "encima" if largo else "debajo", pts(precio)))
             if ctx["por_op"] and perdida > ctx["por_op"] + 0.005:
@@ -464,9 +470,12 @@ def _comprobar_accion(o, ctx):
     if cierre:
         info.append("cierre: solo se mira el formato, la NYSE abierta y que no sea un corto (%s %s acciones de %s en kemet/portfolio.json)"
                     % ("vendes" if lado == "venta" else "recompras", n, sim))
+    elif cierre_declarado and lado == "venta" and n:
+        cierre = True
+        avisos.append("cierre de %d %s y en kemet/portfolio.json hay %s: antes de enviarla, get_open_position %s tiene que decir que tienes %d o más; "
+                      "si no, esta venta abre un corto" % (n, sim, num(tiene, 0), sim, n))
     elif cierre_declarado:
-        avisos.append("marcada como cierre, pero en kemet/portfolio.json hay %s %s: no reduce ninguna posición y la compruebo como entrada. "
-                      "Si la posición es real, apúntala primero (broker.py registrar)" % (num(tiene, 0), sim))
+        avisos.append("marcada como cierre, pero en kemet/portfolio.json no hay un corto de %s que recomprar: la compruebo como entrada" % sim)
     if not cierre and n and ref is None:
         luego.append("precio: sin precio de %s para medir %d acciones: pon la entrada en plan o guarda kemet/precios.json (alertas.py quote %s --escribir)" % (sim, n, sim))
     # lista de bloqueados y tamaño
@@ -592,8 +601,13 @@ def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None, broker=None, cart
         avisos_top.append("semáforo %s en el plan de hoy (kemet/plan-sesion.json): la pérdida máxima del día baja a la mitad, de %s a %s"
                           % ({"ambar": "ámbar"}.get(sem, sem), usd(pmd), usd(pmd / 2.0)))
         pmd = round(pmd / 2.0, 2)
+        mitad = True
+    else:
+        mitad = False
     fyp = int(c.get("fallos_y_paras") or FALLOS_Y_PARAS)
     por_op = _f(c.get("riesgo_por_operacion")) if propia and c.get("riesgo_por_operacion") else (pmd / fyp if pmd else None)
+    if mitad and propia and c.get("riesgo_por_operacion") and por_op:
+        por_op = round(por_op / 2.0, 2)
     if not cfg:
         if hay_acciones:
             avisos_top.append("sin kemet/config.json: compruebo con los valores por defecto de una cuenta propia (pérdida máxima del día %s, %s por operación, tres fallos y paras); ejecuta tamano.py config --propia" % (usd(pmd), usd(por_op or 0)))
@@ -754,6 +768,11 @@ def cmd_registrar(a):
         return 0
     if a.resultado is None:
         raise KemetError("di qué apunto: --abrir, o --resultado USD (negativo si es pérdida)")
+    if not [o for o in dia["operaciones"] if not o.get("cerrada")] and fecha != ny.date().isoformat():
+        previo = comun.leer_json(comun.ruta(DIA), obligatorio=False)
+        if isinstance(previo, dict) and str(previo.get("fecha")) == ny.date().isoformat():
+            dia, fecha = previo, ny.date().isoformat()      # después de las 18:00 NY: se cierra la operación de la sesión de hoy
+            dia.setdefault("operaciones", [])
     abiertas = [o for o in dia["operaciones"] if not o.get("cerrada")]
     if not abiertas:
         raise KemetError("no hay ninguna operación abierta hoy en %s" % comun.ruta(DIA))
@@ -799,9 +818,9 @@ def resumen_dia(dia, cfg):
 
 def cmd_hoy(a):
     ahora = comun.parse_ahora(a.ahora)
-    fecha = comun.a_ny(ahora).date().isoformat()
-    dia = leer_dia(fecha)
     cfg, existe = cargar_config()
+    fecha = fecha_de(comun.a_ny(ahora), cfg if existe else None)
+    dia = leer_dia(fecha)
     if a.json:
         recalcular(dia)
         print(json.dumps(dia, ensure_ascii=False, indent=1))

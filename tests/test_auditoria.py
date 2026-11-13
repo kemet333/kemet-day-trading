@@ -36,15 +36,17 @@ class Puerta(tr.Base):
         compra = dict(tr.ORDEN_TSLA, qty="500", cierre=True)
         compra.pop("stop_loss_stop_price", None)
         self.assertEqual(self.veredicto(compra)[0], "BLOCK")
-        corto = dict(tr.CIERRE_TSLA, qty="500", cierre=True)
-        v, res = self.veredicto(corto)
-        self.assertEqual(v, "BLOCK")
-        self.assertIn("corto:", self.motivos(res))
+        venta = dict(tr.CIERRE_TSLA, qty="5", cierre=True)              # vender lo que solo está en Alpaca: cierre, con su aviso
+        v, res = self.veredicto(venta, "2026-11-11 15:52")
+        self.assertEqual(v, "PASS", self.motivos(res))
+        self.assertTrue(any("get_open_position" in a for a in res["resultados"][0]["avisos"]))
         comun.escribir_json(os.path.join(self.kemet, "config.json"), tr.CONFIG)
-        futuro = dict(tr.CIERRE, contratos=100, lado="compra")          # «cierre» de 100 MNQ sin nada abierto a las 15:58
+        futuro = dict(tr.CIERRE, contratos=1000, lado="compra")         # «cierre» de 1.000 MNQ: más que el tope de la cuenta
         v, res = self.veredicto(futuro, "2026-11-11 15:58")
         self.assertEqual(v, "BLOCK")
-        self.assertTrue(any("marcada como cierre" in a for a in res["resultados"][0]["avisos"]))
+        self.assertIn("más que el tope", self.motivos(res))
+        v, res = self.veredicto(dict(tr.CIERRE, contratos=1), "2026-11-11 15:58")   # cerrar 1 MNQ que el pack no conoce, sí
+        self.assertEqual(v, "PASS", self.motivos(res))
 
     def test_un_cierre_de_verdad_sigue_pasando_tarde(self):
         self.dia([{"hora": "10:46", "simbolo": "MNQ", "lado": "compra", "contratos": 2, "riesgo_usd": 469.0, "resultado_usd": None, "cerrada": None}])
@@ -99,6 +101,18 @@ class Puerta(tr.Base):
         self.assertEqual(res["resultados"][0]["veredicto"], "BLOCK")      # 300 + 234,50 > 500 (la mitad de 1.000)
         self.assertTrue(any("semáforo ámbar" in a for a in res["avisos"]))
 
+    def test_registrar_un_resultado_despues_de_las_18(self):
+        self.dia([{"hora": "10:46", "simbolo": "MNQ", "lado": "compra", "contratos": 1, "riesgo_usd": 234.5, "resultado_usd": None, "cerrada": None}])
+        code, out, err = tr.run(["registrar", "--resultado", "120", "--hora", "15:50", "--ahora", "2026-11-11 18:30"])
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.leer("estado", "dia.json")["operaciones"][0]["resultado_usd"], 120.0)
+
+    def test_tamano_y_riesgo_aplican_el_mismo_ambar(self):
+        cfg, aviso = tamano.con_semaforo_de_hoy(dict(tr.CONFIG), {"fecha": "2026-11-11", "semaforo": "ambar"},
+                                                comun.a_ny(comun.parse_ahora("2026-11-11 10:45")))
+        self.assertEqual(cfg["perdida_max_dia"], 500.0)
+        self.assertIn("ámbar", aviso)
+
     def test_el_dia_de_futuros_empieza_a_las_18(self):
         self.dia([{"hora": "20:10", "simbolo": "MNQ", "lado": "compra", "contratos": 3, "riesgo_usd": 700.0, "resultado_usd": -900.0, "cerrada": "20:40"}],
                  fecha="2026-11-12")                                      # jueves 20:10 NY: ya es la sesión del 12
@@ -129,8 +143,14 @@ class Bróker(tb.Base):
                   "sí, compra AAPL", "sí, 8 de TSLA a 500"):
             vale, por_que = broker.es_un_si(r, tb.TSLA, ["TSLA"])
             self.assertFalse(vale, r)
-        for r in ("sí", "Sí, 8 TSLA", "sí, TSLA"):
+        for r in ("sí", "Sí, 8 TSLA", "sí, TSLA", "Sí, confirmo", "sí, ponla ya", "si, perfecto", "SÍ, PONLA"):
             self.assertTrue(broker.es_un_si(r, tb.TSLA, ["TSLA"])[0], r)
+
+    def test_client_order_id_cambia_con_el_dia_y_el_intento(self):
+        a = broker.entrada_alpaca(tb.TSLA, "2026-11-11", 1)["client_order_id"]
+        self.assertNotEqual(a, broker.entrada_alpaca(tb.TSLA, "2026-11-12", 1)["client_order_id"])
+        self.assertNotEqual(a, broker.entrada_alpaca(tb.TSLA, "2026-11-11", 2)["client_order_id"])
+        self.assertLessEqual(len(a), 48)                                   # Alpaca admite hasta 128
 
     def test_el_si_por_la_entrada_estandar(self):
         viejo = sys.stdin
@@ -181,7 +201,7 @@ class Tamano(unittest.TestCase):
 
     def test_contratos_y_tick(self):
         self.assertEqual(comun.CONTRATOS["NG"]["punto_micro"], 1000.0)    # MNG: 1.000 MMBtu
-        self.assertEqual(comun.CONTRATOS["6E"]["tick"], 0.0001)            # el tick de M6E, válido también en 6E
+        self.assertEqual((comun.tick_de("6E", micro=False), comun.tick_de("6E")), (0.00005, 0.0001))   # 6E y M6E
         self.assertEqual(comun.al_tick(112.484375, comun.CONTRATOS["ZN"]["tick"]), 112.484375)
         self.assertEqual(comun.pts(1.11235), "1,11235")
         self.assertEqual(comun.pts(88.239998), "88,24")
@@ -214,6 +234,10 @@ class Diario(unittest.TestCase):
                                 '11/13/2026,10:05 AM,NQ,largo,1,"26,812.25","26,880","26,772","1,355"\n')
         self.assertEqual([o["fecha"].isoformat() for o in ops], ["2026-11-02", "2026-11-13"])
         self.assertEqual((ops[0]["entrada"], ops[0]["pnl"], ops[0]["hora"].strftime("%H:%M")), (26812.0, 1360.0, "09:52"))
+
+    def test_simbolos_con_ano_de_cuatro_cifras(self):
+        for s, codigo in (("MNQZ2026", "NQ"), ("NQH2027", "NQ"), ("MNQ1", "NQ"), ("ESZ6", "ES")):
+            self.assertEqual(diario.contrato_de(s)[0], codigo, s)
 
     def test_formato_espanol_sigue_igual(self):
         ops, _ = self.leer("fecha;hora;simbolo;lado;contratos;entrada;salida;stop\n02/11/2026;10:00;MNQ;largo;2;28.426,25;28.440,50;28.400\n")

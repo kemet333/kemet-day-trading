@@ -406,8 +406,8 @@ def calcular(drawdown, diario, cap, mercado, stop, semaforo="verde", perdida_max
     c = comun.CONTRATOS[mercado]
     if stop is None or not stop == stop or stop <= 0:
         raise KemetError("hace falta --stop en puntos (mayor que 0)")
-    if stop < c["tick"] - 1e-12:
-        raise KemetError("un stop de %s puntos es menos de un tick de %s (%s): no existe en la plataforma" % (pts(stop), mercado, pts(c["tick"])))
+    if stop < comun.tick_de(mercado) - 1e-12:
+        raise KemetError("un stop de %s puntos es menos de un tick de %s (%s): no existe en la plataforma" % (pts(stop), c["micro"], pts(comun.tick_de(mercado))))
     hoy, cuarto = perdida_maxima_dia(drawdown, diario, semaforo)
     if perdida_max_dia is not None:
         hoy = round(perdida_max_dia * (1.0 if semaforo == "verde" else 0.5), 2)
@@ -578,11 +578,12 @@ def dimensionar(plan, cfg, hoy, dia_doc=None, tipo="stop", limite=None, precios=
     if (largo and objetivo <= entrada) or (not largo and objetivo >= entrada):
         return {"rechazo": "el objetivo %s no está %s de la entrada %s" % (pts(objetivo), "encima" if largo else "debajo", pts(entrada)),
                 "contratos": 0, "limites": []}
-    if abs(entrada - stop) < c["tick"] - 1e-9:
-        return {"rechazo": "el stop está a menos de un tick (%s) de la entrada: no existe en la plataforma" % pts(c["tick"]), "contratos": 0, "limites": []}
-    riesgo_pts = comun.al_tick(abs(entrada - stop), c["tick"])
+    tick = comun.tick_de(mercado)
+    if abs(entrada - stop) < tick - 1e-9:
+        return {"rechazo": "el stop está a menos de un tick (%s) de la entrada: no existe en la plataforma" % pts(tick), "contratos": 0, "limites": []}
+    riesgo_pts = comun.al_tick(abs(entrada - stop), tick)
     if riesgo_pts < abs(entrada - stop) - 1e-9:
-        riesgo_pts = round(riesgo_pts + c["tick"], 8)          # al tick hacia arriba: el riesgo nunca se mide por debajo del real
+        riesgo_pts = round(riesgo_pts + tick, 8)          # al tick hacia arriba: el riesgo nunca se mide por debajo del real
     if _f(plan.get("riesgo_pts")) and abs(_f(plan["riesgo_pts"]) - riesgo_pts) > c["tick"]:
         raise KemetError("el plan dice riesgo_pts %s pero entrada menos stop son %s puntos" % (pts(_f(plan["riesgo_pts"])), pts(riesgo_pts)))
     por_micro = round(riesgo_pts * c["punto_micro"], 2)
@@ -921,6 +922,21 @@ def cmd_calc(a):
     return 0 if r["contratos"] > 0 else 1
 
 
+def con_semaforo_de_hoy(cfg, sesion, ny):
+    """Si el plan de sesión de hoy (kemet/plan-sesion.json) está en ámbar o rojo y la config en verde, la pérdida del día y el riesgo
+    por operación a la mitad: lo mismo que hace kemet-riesgo, para que la orden que se propone sea la que después pasa."""
+    if not isinstance(sesion, dict) or str(sesion.get("fecha")) not in (ny.date().isoformat(), comun.dia_negociacion(ny).isoformat()):
+        return cfg, None
+    sem = str(sesion.get("semaforo") or "verde")
+    if sem not in ("ambar", "rojo") or str(cfg.get("semaforo") or "verde") != "verde" or not cfg.get("perdida_max_dia"):
+        return cfg, None
+    nuevo = dict(cfg, semaforo=sem, perdida_max_dia=round(float(cfg["perdida_max_dia"]) / 2.0, 2))
+    if cfg.get("riesgo_por_operacion"):
+        nuevo["riesgo_por_operacion"] = round(float(cfg["riesgo_por_operacion"]) / 2.0, 2)
+    return nuevo, "semáforo %s en el plan de hoy (kemet/plan-sesion.json): pérdida máxima del día %s en vez de %s" % (
+        {"ambar": "ámbar"}.get(sem, sem), usd(nuevo["perdida_max_dia"]), usd(cfg["perdida_max_dia"]))
+
+
 def cmd_orden(a):
     ahora = comun.parse_ahora(a.ahora)
     hoy = comun.a_ny(ahora).date().isoformat()
@@ -937,6 +953,9 @@ def cmd_orden(a):
         limite = True if a.limite == "plan" else _f(a.limite)
         if limite is None or (limite is not True and limite <= 0):
             raise KemetError("--limite va solo (el precio de entrada del plan) o con un precio mayor que 0, no %r" % a.limite)
+    cfg, aviso_sem = con_semaforo_de_hoy(cfg, comun.leer_json("plan-sesion.json", obligatorio=False), comun.a_ny(ahora))
+    if aviso_sem and not a.json:
+        print("AVISO: " + aviso_sem)
     s = dimensionar(plan, cfg, hoy, dia, a.tipo, limite, precios, cartera, broker, ahora)
     orden = orden_bracket(s) if s.get("limites") else None
     doc = None

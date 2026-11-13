@@ -378,11 +378,11 @@ class Acciones(Base):
         self.assertEqual((res["resultados"][1]["clase"], res["resultados"][1]["motivos"]), ("cierre", []))
         self.assertTrue(any("vendes 9 acciones de TSLA" in x for x in res["resultados"][1]["info"]))
         os.remove(os.path.join(self.kemet, "portfolio.json"))
-        self.ordenes([dict(CIERRE_TSLA, cierre=True)])         # sin cartera, "cierre": true ya no basta: no reduce nada, es un corto
+        self.ordenes([dict(CIERRE_TSLA, cierre=True)])         # sin cartera, "cierre": true lo declara (con el aviso de mirar la posición)
         code, res = self.check("2026-11-11 15:58")
-        self.assertEqual(code, 1)
-        self.assertEqual(res["resultados"][0]["clase"], "entrada")
-        self.assertTrue(any("marcada como cierre" in x for x in res["resultados"][0]["avisos"]))
+        self.assertEqual(code, 0)
+        self.assertEqual(res["resultados"][0]["clase"], "cierre")
+        self.assertTrue(any("get_open_position" in x for x in res["resultados"][0]["avisos"]))
         self.ordenes([CIERRE_TSLA])                            # sin cartera y sin declararlo, vender es un corto
         code, res = self.check("2026-11-11 15:50")
         self.assertEqual(code, 1)

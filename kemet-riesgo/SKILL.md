@@ -55,8 +55,11 @@ toca parar (día agotado o tres operaciones).
 
 Una **entrada** abre o añade posición. Un **cierre** (`"cierre": true`, o en acciones una venta de lo que
 tienes en `kemet/portfolio.json`) solo saca de una. Salir siempre tiene que ser posible: a un cierre se le
-mira el formato y que el mercado esté abierto (Globex o la NYSE); todo lo demás se convierte en aviso, nunca
-en BLOCK.
+mira el formato y, en acciones, que la NYSE esté abierta; todo lo demás se convierte en aviso, nunca en BLOCK.
+Tres límites para que «cierre» no sirva para abrir: en futuros, un cierre no puede tener más contratos que el
+tope de la cuenta; en acciones, una compra marcada como cierre solo lo es si recompra un corto de
+`kemet/portfolio.json`; y una venta marcada como cierre de acciones que el pack no tiene apuntadas pasa con el
+aviso de comprobar antes la posición con `get_open_position` (si no las tiene, esa venta abre un corto).
 
 ## Las comprobaciones
 

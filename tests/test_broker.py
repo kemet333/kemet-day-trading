@@ -101,7 +101,7 @@ class TestTicket(Base):
         self.assertEqual(t["herramienta"], "place_stock_order")
         self.assertEqual(t["entrada_herramienta"], {"symbol": "TSLA", "side": "buy", "qty": "8", "type": "market", "time_in_force": "day",
                                                     "order_class": "bracket", "take_profit_limit_price": "396.65", "stop_loss_stop_price": "389.51",
-                                                    "client_order_id": "kemet-" + broker.huella(TSLA)})
+                                                    "client_order_id": "kemet-" + broker.huella(TSLA) + "-20261111-1"})
         self.assertNotIn("why", t["entrada_herramienta"])
         self.assertEqual(t["perdida_al_stop"], 28.56)
         self.assertIn("COMPRA 8 TSLA, a mercado, válida hoy", t["llano"])

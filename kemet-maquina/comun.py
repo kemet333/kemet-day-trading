@@ -40,14 +40,20 @@ CONTRATOS = {
     "SI":  {"yahoo": "SI=F", "mini": "SI",  "micro": "SIL", "tick": 0.005, "punto_mini": 5000.0, "punto_micro": 1000.0, "rth": ("08:25", "13:25"), "plano": "13:20", "nombre": "Plata"},
     "HG":  {"yahoo": "HG=F", "mini": "HG",  "micro": "MHG", "tick": 0.0005, "punto_mini": 25000.0, "punto_micro": 2500.0, "rth": ("08:10", "13:00"), "plano": "12:55", "nombre": "Cobre"},
     "NG":  {"yahoo": "NG=F", "mini": "NG",  "micro": "MNG", "tick": 0.001, "punto_mini": 10000.0, "punto_micro": 1000.0, "rth": ("09:00", "14:30"), "plano": "14:25", "nombre": "Gas natural"},
-    "6E":  {"yahoo": "6E=F", "mini": "6E",  "micro": "M6E", "tick": 0.0001,  "punto_mini": 125000.0, "punto_micro": 12500.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Euro"},
+    "6E":  {"yahoo": "6E=F", "mini": "6E",  "micro": "M6E", "tick": 0.00005, "tick_micro": 0.0001, "punto_mini": 125000.0, "punto_micro": 12500.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Euro"},
     "ZN":  {"yahoo": "ZN=F", "mini": "ZN",  "micro": "ZN",  "tick": 0.015625, "punto_mini": 1000.0, "punto_micro": 1000.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Bono 10 años"},
     "ZB":  {"yahoo": "ZB=F", "mini": "ZB",  "micro": "ZB",  "tick": 0.03125, "punto_mini": 1000.0, "punto_micro": 1000.0, "rth": ("08:20", "15:00"), "plano": "14:55", "nombre": "Bono 30 años"},
 }
 INDICES = ("ES", "NQ", "YM", "RTY")
-# MNG son 1.000 MMBtu (1 $/tick). En 6E el tick es el del micro (0,0001): un precio a 0,0001 vale para 6E (0,00005) y M6E.
+# MNG son 1.000 MMBtu (1 $/tick). En 6E el micro (M6E) tiene su propio tick, 0,0001: tick_de() da el de cada contrato.
 # ZN y ZB no tienen micro: su «micro» es el propio contrato y se cuenta con el tope de minis, nunca con el de micros.
 MICRO_A_CODIGO = {v["micro"]: k for k, v in CONTRATOS.items() if v["micro"] != v["mini"]}
+
+
+def tick_de(codigo, micro=True):
+    """El tick del contrato que se opera: el del micro (M6E 0,0001) o el del mini. El pack dimensiona en micros."""
+    c = CONTRATOS[codigo]
+    return c.get("tick_micro", c["tick"]) if micro else c["tick"]
 
 
 def sin_micro(codigo):

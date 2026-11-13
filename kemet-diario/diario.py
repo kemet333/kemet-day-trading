@@ -185,9 +185,12 @@ def contrato_de(simbolo):
     s = str(simbolo or "").strip().upper().replace(" ", "")
     candidatos = [s]
     # la letra del mes solo se quita si detrás va el año (MNQZ6, NQZ26): CLF, SIG o HGV son acciones, no CL, SI o HG
-    m = re.match(r"^([A-Z0-9]{1,4}?)([FGHJKMNQUVXZ])(\d{1,2})$", s)
-    if m and (m.group(1) in comun.CONTRATOS or m.group(1) in comun.MICRO_A_CODIGO):
-        candidatos.append(m.group(1))
+    m = re.match(r"^([A-Z0-9]*?[A-Z])(\d{1,4})$", s)
+    if m:
+        base = m.group(1)
+        for c in (base, base[:-1] if base[-1] in "FGHJKMNQUVXZ" else None):
+            if c and (c in comun.CONTRATOS or c in comun.MICRO_A_CODIGO):
+                candidatos.append(c)
     for c in candidatos:
         if c in comun.MICRO_A_CODIGO:
             k = comun.MICRO_A_CODIGO[c]
