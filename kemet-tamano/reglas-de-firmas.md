@@ -23,7 +23,7 @@ Fuente: https://help.topstep.com/en/articles/8284197-trading-combine-parameters
 | Express Funded 150K | financiada | $4500 EOD | $3000 | sin dato · sin dato | 15:10 Chicago | CPI, NFP, PPI y FOMC: sin minis en la ventana; micros según tu saldo | ruta consistencia: mejor día ≤ 40% |
 | | | | | | | | *Contratos según el Scaling Plan: mira tu límite en TopstepX. Límite diario solo si lo elegiste en el Combine* |
 
-## Tradeify · comprobado el 24/10/2026
+## Tradeify · comprobado el 13/11/2026
 
 Fuente: https://help.tradeify.co/en/articles/12268167-essential-trading-rules-overview
 
@@ -45,8 +45,30 @@ Fuente: https://help.tradeify.co/en/articles/12268167-essential-trading-rules-ov
 | Lightning 50K · fondeada directa | financiada | $2000 EOD | $1250 | 4 · 40 | 16:45 Nueva York | permitido | 20% en el primer cobro, luego 25% y 30% |
 | Lightning 100K · fondeada directa | financiada | $4000 EOD | $2500 | 8 · 80 | 16:45 Nueva York | permitido | 20% en el primer cobro, luego 25% y 30% |
 | Lightning 150K · fondeada directa | financiada | $5250 EOD | $3000 | 12 · 120 | 16:45 Nueva York | permitido | 20% en el primer cobro, luego 25% y 30% |
+| Select Flex 25K · fondeada | financiada | $1000 EOD | sin dato | 1 · 10 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 2 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Daily 25K · fondeada | financiada | $1000 EOD | $500 | 1 · 10 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 2 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Flex 50K · fondeada | financiada | $2000 EOD | sin dato | 2 · 20 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 4 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Daily 50K · fondeada | financiada | $2000 EOD | $1000 | 2 · 20 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 4 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Flex 100K · fondeada | financiada | $3000 EOD | sin dato | 3 · 30 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 8 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Daily 100K · fondeada | financiada | $2500 EOD | $1250 | 3 · 30 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 8 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Flex 150K · fondeada | financiada | $4500 EOD | sin dato | 3 · 30 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 12 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Daily 150K · fondeada | financiada | $3500 EOD | $1750 | 3 · 30 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 12 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select 300K · evaluación | evaluación | $8000 EOD | $4000 | 16 · 160 | 16:45 Nueva York | permitido | mejor día ≤ 40% para pasar |
+| | | | | | | | *Sin reinicios: si la suspendes, se cierra* |
+| Select Flex 300K · fondeada | financiada | $8000 EOD | $4000 | 3 · 30 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 16 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
+| Select Daily 300K · fondeada | financiada | $6000 EOD | $3000 | 3 · 30 | 16:45 Nueva York | permitido | — |
+| | | | | | | | *Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 16 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.* |
 
-## Alpha Futures · comprobado el 24/10/2026
+## Alpha Futures · comprobado el 13/11/2026
 
 Fuente: https://alpha-futures.com/how-it-works
 
@@ -75,8 +97,12 @@ Fuente: https://alpha-futures.com/how-it-works
 | Advanced 100K · fondeada | financiada | $3500 EOD | sin dato | 10 · 100 | 16:20 Nueva York | permitido | — |
 | Advanced 150K · evaluación | evaluación | $5250 EOD | sin dato | 15 · 150 | 16:20 Nueva York | permitido | mejor día ≤ 40% para pasar |
 | Advanced 150K · fondeada | financiada | $5250 EOD | sin dato | 15 · 150 | 16:20 Nueva York | permitido | — |
+| Direct 25K · fondeada directa | financiada | $1000 EOD | $500 | 2 · 20 | 16:20 Nueva York | sin órdenes 2 min antes y después de noticias rojas (ForexFactory) | mejor día ≤ 20% para cobrar |
+| Direct 50K · fondeada directa | financiada | $2000 EOD | $1000 | 4 · 40 | 16:20 Nueva York | sin órdenes 2 min antes y después de noticias rojas (ForexFactory) | mejor día ≤ 20% para cobrar |
+| Direct 100K · fondeada directa | financiada | $3000 EOD | $2000 | 8 · 80 | 16:20 Nueva York | sin órdenes 2 min antes y después de noticias rojas (ForexFactory) | mejor día ≤ 20% para cobrar |
+| Direct 150K · fondeada directa | financiada | $4500 EOD | $3000 | 10 · 100 | 16:20 Nueva York | sin órdenes 2 min antes y después de noticias rojas (ForexFactory) | mejor día ≤ 20% para cobrar |
 
-## Lucid Trading · comprobado el 24/10/2026
+## Lucid Trading · comprobado el 13/11/2026
 
 Fuente: https://support.lucidtrading.com
 
@@ -113,6 +139,22 @@ Fuente: https://support.lucidtrading.com
 | LucidDirect 50K · fondeada directa | financiada | $2000 EOD | $1200 | 4 · 40 | 16:45 Nueva York | permitido | mejor día ≤ 20% para cobrar |
 | LucidDirect 100K · fondeada directa | financiada | $3500 EOD | $2100 | 6 · 60 | 16:45 Nueva York | permitido | mejor día ≤ 20% para cobrar |
 | LucidDirect 150K · fondeada directa | financiada | $5000 EOD | $3000 | 10 · 100 | 16:45 Nueva York | permitido | mejor día ≤ 20% para cobrar |
+| LucidDaily 25K · evaluación | evaluación | $1000 intradía | $600 | 2 · 20 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | mejor día ≤ 50% para pasar |
+| | | | | | | | *Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)* |
+| LucidDaily 25K · fondeada | financiada | $1000 intradía | $600 | 2 · 20 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | — |
+| | | | | | | | *Límite diario solo si lo elegiste al comprar* |
+| LucidDaily 50K · evaluación | evaluación | $2000 intradía | $1200 | 4 · 40 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | mejor día ≤ 50% para pasar |
+| | | | | | | | *Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)* |
+| LucidDaily 50K · fondeada | financiada | $2000 intradía | $1200 | 4 · 40 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | — |
+| | | | | | | | *Límite diario solo si lo elegiste al comprar* |
+| LucidDaily 100K · evaluación | evaluación | $3000 intradía | $1800 | 6 · 60 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | mejor día ≤ 50% para pasar |
+| | | | | | | | *Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)* |
+| LucidDaily 100K · fondeada | financiada | $3000 intradía | $1800 | 6 · 60 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | — |
+| | | | | | | | *Límite diario solo si lo elegiste al comprar* |
+| LucidDaily 150K · evaluación | evaluación | $4500 intradía | $2700 | 10 · 100 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | mejor día ≤ 50% para pasar |
+| | | | | | | | *Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)* |
+| LucidDaily 150K · fondeada | financiada | $4500 intradía | $2700 | 10 · 100 | 16:45 Nueva York | noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta) | — |
+| | | | | | | | *Límite diario solo si lo elegiste al comprar* |
 
 ## Apex Trader Funding · comprobado el 13/11/2026
 

@@ -550,3 +550,66 @@ def huella_dia(doc):
     ops = doc.get("operaciones") if isinstance(doc, dict) else None
     blob = json.dumps([doc.get("fecha") if isinstance(doc, dict) else None, ops or []], sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
+
+
+# ---------------------------------------------------------------- lo que queda de drawdown (kemet/estado/cuenta.json)
+
+CUENTA = os.path.join("estado", "cuenta.json")
+
+
+def drawdown_restante(doc, fecha=None):
+    """Lo que el usuario apuntó con tamano.py cuenta: cuánto le queda hasta el límite de pérdida de su firma.
+    Devuelve (dólares o None, aviso o None). Un apunte de otro día se sigue usando (solo puede bajar el tamaño), con aviso."""
+    if not isinstance(doc, dict) or doc.get("drawdown_restante") is None:
+        return None, None
+    try:
+        q = float(doc["drawdown_restante"])
+    except (TypeError, ValueError):
+        q = float("nan")
+    if q != q or q in (float("inf"), float("-inf")):
+        return None, "kemet/estado/cuenta.json tiene un drawdown restante que no es un número: apúntalo otra vez con tamano.py cuenta --queda …"
+    aviso = None
+    if fecha and str(doc.get("fecha")) != str(fecha):
+        aviso = ("lo que te queda de drawdown (%s) lo apuntaste el %s, no hoy (%s): mira tu panel y apúntalo con tamano.py cuenta --queda …"
+                 % (usd(q), doc.get("fecha") or "?", fecha))
+    return q, aviso
+
+
+def huella_cuenta(doc):
+    """Huella de kemet/estado/cuenta.json: si lo que queda de drawdown cambia, un PASS anterior ya no vale para el bróker."""
+    if not isinstance(doc, dict):
+        return None
+    return "%s|%s" % (doc.get("fecha"), doc.get("drawdown_restante"))
+
+
+def tope_drawdown(queda, usuario=False):
+    """La pérdida del día que permite lo que queda de drawdown, en verde: un cuarto (la regla Kemet), o todo lo que queda si la
+    pérdida del día la fijó el usuario. Nunca negativa."""
+    queda = max(0.0, float(queda))
+    return queda if usuario else float(round(queda * 0.25))
+
+
+def con_drawdown_restante(cfg, doc, fecha):
+    """Una cuenta de firma con lo que queda de drawdown apuntado: si su tope es menor que la pérdida máxima del día de la config,
+    la baja (con el semáforo de la config ya aplicado). Devuelve (config, avisos). Las cuentas propias no tienen drawdown."""
+    if not isinstance(cfg, dict) or cfg.get("tipo_cuenta") == "propia" or cfg.get("cuenta") == "propia" or not cfg.get("perdida_max_dia"):
+        return cfg, []
+    queda, aviso = drawdown_restante(doc, fecha)
+    avisos = [aviso] if aviso else []
+    if queda is None:
+        return cfg, avisos
+    factor = 1.0 if str(cfg.get("semaforo") or "verde") == "verde" else 0.5
+    usuario = cfg.get("perdida_max_dia_origen") == "usuario"
+    tope = round(tope_drawdown(queda, usuario) * factor, 2)
+    pmd = float(cfg["perdida_max_dia"])
+    if queda <= 0:
+        avisos.append("te quedan %s de drawdown: la cuenta está en su límite de pérdida, hoy no se opera" % usd(queda))
+        return dict(cfg, perdida_max_dia=0.0, drawdown_restante=queda), avisos
+    if tope >= pmd - 0.005:
+        return dict(cfg, drawdown_restante=queda), avisos
+    if tope == int(tope):
+        tope = int(tope)
+    como = "todo lo que te queda" if usuario else "un cuarto de lo que te queda"
+    avisos.append("te quedan %s de drawdown: la pérdida máxima del día baja de %s a %s (%s%s)"
+                  % (usd(queda), usd(pmd), usd(tope), como, ", a la mitad por el semáforo" if factor < 1 else ""))
+    return dict(cfg, perdida_max_dia=tope, drawdown_restante=queda), avisos

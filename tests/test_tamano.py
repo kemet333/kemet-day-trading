@@ -78,7 +78,7 @@ class TestConfig(Base):
         self.assertTrue(cfg["fuente"].startswith("https://apextraderfunding.com"))
 
     def test_limite_diario_menor_que_el_cuarto(self):
-        # Ninguna de las 76 cuentas publica un límite diario menor que el cuarto del drawdown; se prueba con una cuenta sintética.
+        # Ninguna de las 99 cuentas publica un límite diario menor que el cuarto del drawdown; se prueba con una cuenta sintética.
         firma = {"id": "x", "name": "Firma X", "checked": "01/11/2026", "source": "https://x"}
         cuenta = {"id": "y", "label": "Y 50K", "phase": "evaluation", "max_loss": 2000, "max_loss_type": "eod_trailing",
                   "daily_loss_limit": 300, "max_mini": 2, "max_micro": 20, "flat_by": {"time": "16:00", "tz": "America/New_York"}, "news": "permitido"}
@@ -126,7 +126,7 @@ class TestConfig(Base):
         code, out, _ = run(["listar"])
         self.assertEqual(code, 0)
         self.assertIn("eod-pa-50", out)
-        self.assertEqual(out.count("\n   "), 76)
+        self.assertEqual(out.count("\n   "), 99)
 
 
 class TestCalc(Base):

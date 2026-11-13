@@ -45,15 +45,18 @@ FRANJAS = [("preapertura", "08:00", "09:30"), ("apertura", "09:30", "09:45"), ("
            ("hora de comer", "11:30", "13:30"), ("tarde", "13:30", "15:30"), ("cierre", "15:30", "16:00")]
 DIAS_SEMANA = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 COLUMNAS = {
-    "fecha": ("fecha", "date", "dia", "day", "fecha_ny"),
-    "hora": ("hora", "time", "hora_ny", "hora_entrada", "entry_time", "time_ny", "hora_madrid", "time_madrid"),
-    "simbolo": ("simbolo", "symbol", "mercado", "instrumento", "instrument", "ticker", "contrato", "contract"),
-    "lado": ("lado", "side", "direccion", "direction"),
+    "fecha": ("fecha", "date", "dia", "day", "fecha_ny", "trade_date", "tradeday", "trade_day"),
+    # la hora de entrada; también una columna con fecha y hora juntas (11/9/2026 10:00:13 AM, 2026-11-09T10:00:13-05:00)
+    "hora": ("hora", "time", "hora_ny", "hora_entrada", "entry_time", "time_ny", "hora_madrid", "time_madrid", "entered_at", "enteredat",
+             "entry_date", "entry_datetime", "entry_date_time", "open_time", "opened_at", "fecha_hora", "datetime"),
+    "simbolo": ("simbolo", "symbol", "mercado", "instrumento", "instrument", "ticker", "contrato", "contract", "contractname", "contract_name"),
+    "lado": ("lado", "side", "direccion", "direction", "market_pos.", "market_pos", "market_position"),
     "contratos": ("contratos", "qty", "cantidad", "quantity", "size", "contracts", "acciones", "shares"),
-    "entrada": ("entrada", "entry", "precio_entrada", "entry_price", "avg_entry"),
-    "salida": ("salida", "exit", "precio_salida", "exit_price", "avg_exit"),
+    "entrada": ("entrada", "entry", "precio_entrada", "entry_price", "avg_entry", "entryprice", "avg_entry_price", "open_price"),
+    "salida": ("salida", "exit", "precio_salida", "exit_price", "avg_exit", "exitprice", "avg_exit_price", "close_price"),
     "stop": ("stop", "stop_loss", "sl", "stoploss"),
-    "pnl": ("pnl", "resultado", "p&l", "profit", "beneficio", "resultado_usd", "net_pnl", "pl"),
+    "pnl": ("pnl", "resultado", "p&l", "profit", "beneficio", "resultado_usd", "net_pnl", "pl", "realized_p&l", "realized_pnl", "net_profit",
+            "profit_loss", "p/l"),
     "nota": ("nota", "note", "notas", "notes", "comentario", "comment", "por_que", "why"),
 }
 LADOS = {"largo": "largo", "long": "largo", "buy": "largo", "compra": "largo", "l": "largo", "b": "largo", "alcista": "largo",
@@ -66,6 +69,9 @@ ETIQUETAS = {
     "tras_tercer_fallo": "entrada después de la tercera pérdida del día",
 }
 PLANTILLA = "fecha,hora,simbolo,lado,contratos,entrada,salida,stop,pnl,nota"
+ZONAS = ("America/New_York", "America/Chicago", "Europe/Madrid", "UTC")
+HORA_NY = ("hora", "hora_ny", "time_ny", "hora_entrada")          # cabeceras que ya dicen (o, en la plantilla, dan por hecho) Nueva York
+EJECUCIONES = ("price", "precio", "fill_price", "avg_price", "avg_fill_price", "avgprice")
 
 
 # ---------------------------------------------------------------- lectura del CSV
@@ -173,6 +179,50 @@ def _hora(x):
     return None
 
 
+_ISO = re.compile(r"^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\s*(Z|[+-]\d{2}:?\d{2})?$", re.I)
+
+
+def _momento(x, orden="dmy"):
+    """Fecha y hora en la misma celda: (fecha, hora, desfase en horas o None) o None si la celda no trae fecha."""
+    s = str(x or "").strip()
+    m = _ISO.match(s)
+    if m:
+        fecha = _fecha(m.group(1))
+        hora = _hora(m.group(2).split(".")[0])
+        off = None
+        if m.group(3):
+            z = m.group(3).upper().replace(":", "")
+            off = 0.0 if z == "Z" else (1 if z[0] == "+" else -1) * (int(z[1:3]) + int(z[3:5]) / 60.0)
+        return (fecha, hora, off) if fecha and hora else None
+    b = FECHA_BARRA.match(s)
+    if b and len(s) > b.end() and s[b.end()] in " T":
+        resto, off = s[b.end() + 1:].strip(), None
+        z = re.search(r"\s*(Z|[+-]\d{2}:?\d{2})$", resto, re.I)          # 11/12/2026 16:00:13 +01:00
+        if z and re.search(r"\d", resto[:z.start()]):
+            t = z.group(1).upper().replace(":", "")
+            off = 0.0 if t == "Z" else (1 if t[0] == "+" else -1) * (int(t[1:3]) + int(t[3:5]) / 60.0)
+            resto = resto[:z.start()]
+        fecha, hora = _fecha(s[:b.end()], orden), _hora(resto)
+        return (fecha, hora, off) if fecha and hora else None
+    return None
+
+
+def a_ny_desde(fecha, hora, zona="America/New_York", off=None):
+    """(fecha, hora) de Nueva York desde la hora de la exportación: con su desfase si lo trae, si no con la zona."""
+    local = dt.datetime.combine(fecha, hora)
+    if off is not None:
+        ny = comun.a_ny(local - dt.timedelta(hours=off))
+    elif zona == "America/Chicago":
+        ny = local + dt.timedelta(hours=1)                      # Chicago y Nueva York cambian de hora el mismo día
+    elif zona == "Europe/Madrid":
+        ny = madrid_a_ny(fecha, hora)
+    elif zona == "UTC":
+        ny = comun.a_ny(local)
+    else:
+        ny = local
+    return ny.date(), ny.time().replace(second=0, microsecond=0)
+
+
 def madrid_a_ny(fecha, hora):
     """Hora de Madrid (naive) a hora de Nueva York del mismo instante."""
     local = dt.datetime.combine(fecha, hora)
@@ -182,7 +232,7 @@ def madrid_a_ny(fecha, hora):
 
 def contrato_de(simbolo):
     """(código, es_micro, valor del punto) para MNQ, NQ, MNQZ6, NQZ26… o un ticker de EE. UU. (TSLA: 1 $ por acción); None si no lo conoce."""
-    s = str(simbolo or "").strip().upper().replace(" ", "")
+    s = re.sub(r"\s+\d{1,2}-\d{2,4}$", "", str(simbolo or "").strip().upper()).replace(" ", "")   # «MNQ 12-26» de NinjaTrader
     candidatos = [s]
     # la letra del mes solo se quita si detrás va el año (MNQZ6, NQZ26): CLF, SIG o HGV son acciones, no CL, SI o HG
     m = re.match(r"^([A-Z0-9]*?[A-Z])(\d{1,4})$", s)
@@ -222,7 +272,7 @@ def mapear_columnas(cabecera):
     return out
 
 
-def leer_csv(ruta, decimal=None, fechas=None):
+def leer_csv(ruta, decimal=None, fechas=None, zona=None):
     """Lee el CSV y devuelve (operaciones, avisos). Cada operación es un dict con las cifras ya en números."""
     try:
         with open(ruta, encoding="utf-8-sig") as fh:
@@ -235,7 +285,22 @@ def leer_csv(ruta, decimal=None, fechas=None):
     sep = ";" if lineas[0].count(";") > lineas[0].count(",") else ","
     filas = list(csv.reader(io.StringIO("\n".join(lineas)), delimiter=sep))
     col = mapear_columnas(filas[0])
-    faltan = [c for c in ("fecha", "hora", "simbolo", "lado", "entrada") if c not in col]
+    normal = [_norm(h) for h in filas[0]]
+    if "lado" not in col:
+        # «Type» o «Tipo» solo es el lado si todas sus celdas son largo/corto (en otras exportaciones es el tipo de orden: Limit, Market)
+        for i, h in enumerate(normal):
+            celdas = [_norm(f[i]) for f in filas[1:] if i < len(f) and f[i].strip()]
+            if h in ("type", "tipo") and celdas and all(c in LADOS for c in celdas):
+                col["lado"] = i
+                break
+    if "entrada" not in col and any(h in EJECUCIONES for h in normal):
+        raise KemetError("parece una exportación de ejecuciones (cada compra y cada venta en su línea, con un solo precio): exporta el informe "
+                         "de operaciones cerradas de tu plataforma (Trades o Performance, con precio de entrada y de salida) o pásalas a la "
+                         "plantilla (`diario.py plantilla`)")
+    i_hora = col.get("hora")
+    # con los dos órdenes: 11/13/2026 no es una fecha día/mes, pero sí trae fecha
+    con_fecha_en_hora = i_hora is not None and any(_momento(f[i_hora], "dmy") or _momento(f[i_hora], "mdy") for f in filas[1:] if i_hora < len(f))
+    faltan = [c for c in ("fecha", "hora", "simbolo", "lado", "entrada") if c not in col and not (c == "fecha" and con_fecha_en_hora)]
     if faltan:
         raise KemetError("al CSV le faltan columnas: %s (cabecera leída: %s). `diario.py plantilla` imprime la cabecera esperada"
                          % (", ".join(faltan), ", ".join(filas[0])))
@@ -245,8 +310,9 @@ def leer_csv(ruta, decimal=None, fechas=None):
         i = col.get(campo)
         return [f[i] for f in filas[1:] if i is not None and i < len(f)]
     estilo = decimal or estilo_de(sum((columna(c) for c in ("entrada", "salida", "stop", "pnl", "contratos")), []))
-    orden = fechas or orden_de_fechas(columna("fecha"))
-    if orden is None and any(FECHA_BARRA.match(str(x).strip()) for x in columna("fecha")):
+    celdas_fecha = columna("fecha") + ([str(x).split(" ")[0] for x in columna("hora")] if con_fecha_en_hora else [])
+    orden = fechas or orden_de_fechas(celdas_fecha)
+    if orden is None and any(FECHA_BARRA.match(str(x).strip()) for x in celdas_fecha):
         orden = "mdy" if estilo == "punto" else "dmy"
         avisos.append("las fechas con barra no dicen si son día/mes o mes/día: las leo como %s (%s); si no es así, pasa --fechas %s"
                       % ("mes/día" if orden == "mdy" else "día/mes", "las cifras son de EE. UU." if estilo == "punto" else "formato español",
@@ -278,7 +344,12 @@ def leer_csv(ruta, decimal=None, fechas=None):
         def v(campo):
             i = col.get(campo)
             return fila[i].strip() if i is not None and i < len(fila) else ""
-        fecha, hora = _fecha(v("fecha"), orden), _hora(v("hora"))
+        mo = _momento(v("hora"), orden)
+        off = None
+        if mo:
+            fecha, hora, off = mo                                   # la fecha de la celda manda: la de otra columna puede ser la de la sesión
+        else:
+            fecha, hora = _fecha(v("fecha"), orden), _hora(v("hora"))
         ct = contrato_de(v("simbolo"))
         lado = LADOS.get(_norm(v("lado")))
         entrada, salida, stop, pnl = _f(v("entrada"), estilo), _f(v("salida"), estilo), _f(v("stop"), estilo), _f(v("pnl"), estilo)
@@ -289,6 +360,8 @@ def leer_csv(ruta, decimal=None, fechas=None):
         if col.get("_hora_madrid"):
             ny = madrid_a_ny(fecha, hora)
             fecha, hora = ny.date(), ny.time()
+        elif off is not None or (zona and zona != "America/New_York"):
+            fecha, hora = a_ny_desde(fecha, hora, zona or "America/New_York", off)
         codigo, es_micro, punto = ct
         if contratos is None:
             contratos = 1
@@ -312,17 +385,30 @@ def leer_csv(ruta, decimal=None, fechas=None):
                 stop = None
             else:
                 riesgo_pts = comun.al_tick(abs(entrada - stop), comun.resolver(codigo)["tick"])
-        ops.append({"linea": n, "fecha": fecha, "hora": hora, "simbolo": v("simbolo").upper(), "mercado": codigo, "micro": es_micro, "punto": punto,
+        # la sesión: en futuros, la de CME (lo de después de las 18:00 NY es del día siguiente); en acciones, el día natural
+        sesion = fecha if punto == 1.0 else comun.dia_negociacion(dt.datetime.combine(fecha, hora))
+        ops.append({"linea": n, "fecha": fecha, "hora": hora, "sesion": sesion, "simbolo": v("simbolo").upper(), "mercado": codigo, "micro": es_micro, "punto": punto,
                     "lado": lado, "contratos": contratos, "entrada": entrada, "salida": salida, "stop": stop, "riesgo_pts": riesgo_pts,
                     "riesgo_usd": round(riesgo_pts * punto * contratos, 2) if riesgo_pts else None, "pnl": pnl, "nota": v("nota"),
                     "infracciones": []})
     if not ops:
         raise KemetError("ninguna operación legible en %s" % ruta)
+    if (not zona and not col.get("_hora_madrid") and normal[i_hora] not in HORA_NY
+            and not any((_momento(f[i_hora], orden) or (0, 0, None))[2] is not None for f in filas[1:] if i_hora < len(f))):
+        avisos.append("leo las horas de «%s» como de Nueva York; las plataformas exportan en la zona que tengas configurada (NinjaTrader, a "
+                      "menudo Chicago): si no es Nueva York, pasa --zona America/Chicago, Europe/Madrid o UTC" % filas[0][i_hora].strip())
     ops.sort(key=lambda o: (o["fecha"], o["hora"], o["linea"]))
     return ops, avisos
 
 
 # ---------------------------------------------------------------- la revisión
+
+def _sesion(o):
+    """El día de la sesión de una operación (las de revisar() sin pasar por leer_csv también valen)."""
+    if o.get("sesion"):
+        return o["sesion"]
+    return o["fecha"] if o.get("punto") == 1.0 else comun.dia_negociacion(dt.datetime.combine(o["fecha"], o["hora"]))
+
 
 def franja_de(t):
     for nombre, a, b in FRANJAS:
@@ -402,8 +488,7 @@ def revisar(ops, cfg=None, agenda=None, stop_habitual=None):
     dias = {}
     for o in ops:
         # un futuro cuenta en su sesión de CME (empieza a las 18:00 NY): tres pérdidas de 23:40 a 01:10 son del mismo día
-        dia = o["fecha"] if o["punto"] == 1.0 else comun.dia_negociacion(dt.datetime.combine(o["fecha"], o["hora"]))
-        dias.setdefault(dia, []).append(o)
+        dias.setdefault(_sesion(o), []).append(o)
     resumen_dias = []
     for f in sorted(dias):
         lista = dias[f]
@@ -456,7 +541,7 @@ def revisar(ops, cfg=None, agenda=None, stop_habitual=None):
                                "pnl": round(sum(o["pnl"] or 0 for o in lista), 2), "perdidas": sum(1 for o in lista if (o["pnl"] or 0) < 0)})
     por_dia_semana = []
     for i, nombre in enumerate(DIAS_SEMANA[:5]):
-        lista = [o for o in ops if o["fecha"].weekday() == i]
+        lista = [o for o in ops if _sesion(o).weekday() == i]
         if lista:
             por_dia_semana.append({"dia": nombre, "operaciones": len(lista), "pnl": round(sum(o["pnl"] or 0 for o in lista), 2)})
     metricas = calcular_metricas(ops, c)
@@ -464,7 +549,7 @@ def revisar(ops, cfg=None, agenda=None, stop_habitual=None):
     rupturas = [dict(v, clave=k) for k, v in cumplimiento.items() if v["n"] and v["medible"]]
     rupturas.sort(key=lambda r: (-r["coste"], -r["n"]))
     correccion = una_correccion(rupturas, ops, c, riesgo_op, ventanas, plano, despues, stop_habitual)
-    return {"operaciones": len(ops), "desde": ops[0]["fecha"].isoformat(), "hasta": ops[-1]["fecha"].isoformat(), "mercado": mercado,
+    return {"operaciones": len(ops), "desde": min(_sesion(o) for o in ops).isoformat(), "hasta": max(_sesion(o) for o in ops).isoformat(), "mercado": mercado,
             "config": {"cuenta_nombre": c.get("cuenta_nombre"), "perdida_max_dia": pmd, "riesgo_por_operacion": round(riesgo_op, 2) if riesgo_op else None,
                        "fallos_y_paras": fyp, "plano_a": comun.hhmm(plano), "hora_limite_ny": comun.hhmm(limite) if limite else None,
                        "sin_entradas_despues": comun.hhmm(despues) if despues else None, "drawdown": c.get("drawdown")},
@@ -677,12 +762,12 @@ def informe(doc, ruta, ahora_utc, avisos):
 
 def cmd_revisar(a):
     ahora = comun.parse_ahora(a.ahora)
-    ops, avisos = leer_csv(a.csv, a.decimal, a.fechas)
+    ops, avisos = leer_csv(a.csv, a.decimal, a.fechas, a.zona)
     desde = _fecha(a.desde) if a.desde else None
     hasta = _fecha(a.hasta) if a.hasta else None
     if a.desde and not desde or a.hasta and not hasta:
         raise KemetError("--desde y --hasta van como AAAA-MM-DD")
-    ops = [o for o in ops if (not desde or o["fecha"] >= desde) and (not hasta or o["fecha"] <= hasta)]
+    ops = [o for o in ops if (not desde or _sesion(o) >= desde) and (not hasta or _sesion(o) <= hasta)]       # por sesión, no por fecha natural
     if not ops:
         raise KemetError("ninguna operación entre %s y %s" % (a.desde or "el principio", a.hasta or "el final"))
     cfg = comun.leer_json("config.json", obligatorio=False)
@@ -708,6 +793,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd")
     p = sub.add_parser("revisar", help="revisa un CSV de operaciones")
     p.add_argument("csv")
+    p.add_argument("--zona", choices=ZONAS, help="zona horaria de las horas del archivo (por defecto Nueva York; una columna hora_madrid ya lo dice)")
     p.add_argument("--desde", help="AAAA-MM-DD")
     p.add_argument("--hasta", help="AAAA-MM-DD")
     p.add_argument("--decimal", choices=["coma", "punto"], help="separador decimal de las cifras si el archivo no lo deja claro (punto: exportación de EE. UU.)")

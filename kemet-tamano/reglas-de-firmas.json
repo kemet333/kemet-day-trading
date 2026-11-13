@@ -109,7 +109,7 @@
   {
    "id": "tradeify",
    "name": "Tradeify",
-   "checked": "24/10/2026",
+   "checked": "13/11/2026",
    "source": "https://help.tradeify.co/en/articles/12268167-essential-trading-rules-overview",
    "accounts": [
     {
@@ -358,13 +358,197 @@
      },
      "news": "permitido",
      "consistency": "20% en el primer cobro, luego 25% y 30%"
+    },
+    {
+     "id": "select-flex-25",
+     "label": "Select Flex 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 2 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-daily-25",
+     "label": "Select Daily 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 500,
+     "max_mini": 1,
+     "max_micro": 10,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 2 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-flex-50",
+     "label": "Select Flex 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 4 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-daily-50",
+     "label": "Select Daily 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 4 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-flex-100",
+     "label": "Select Flex 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 8 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-daily-100",
+     "label": "Select Daily 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 2500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1250,
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 8 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-flex-150",
+     "label": "Select Flex 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 12 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-daily-150",
+     "label": "Select Daily 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 3500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1750,
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 12 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/12853966-select-flex-and-select-daily-payout-policies"
+    },
+    {
+     "id": "select-eval-300",
+     "label": "Select 300K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 8000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 4000,
+     "max_mini": 16,
+     "max_micro": 160,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "consistency": "mejor día ≤ 40% para pasar",
+     "note": "Sin reinicios: si la suspendes, se cierra",
+     "source": "https://help.tradeify.co/en/articles/17845238-300k-select-account-permanent-plan"
+    },
+    {
+     "id": "select-flex-300",
+     "label": "Select Flex 300K · fondeada",
+     "phase": "funded",
+     "max_loss": 8000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 4000,
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 16 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/17845238-300k-select-account-permanent-plan"
+    },
+    {
+     "id": "select-daily-300",
+     "label": "Select Daily 300K · fondeada",
+     "phase": "funded",
+     "max_loss": 6000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "max_mini": 3,
+     "max_micro": 30,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "permitido",
+     "note": "Contratos de partida del plan de escalado de Select: suben con el saldo de cierre hasta 16 minis. Mira tu límite de hoy en el panel de Tradeify y usa ese.",
+     "source": "https://help.tradeify.co/en/articles/17845238-300k-select-account-permanent-plan"
     }
    ]
   },
   {
    "id": "alpha",
    "name": "Alpha Futures",
-   "checked": "24/10/2026",
+   "checked": "13/11/2026",
    "source": "https://alpha-futures.com/how-it-works",
    "accounts": [
     {
@@ -644,13 +828,81 @@
       "tz": "America/New_York"
      },
      "news": "permitido"
+    },
+    {
+     "id": "direct-25",
+     "label": "Direct 25K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 500,
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día ≤ 20% para cobrar",
+     "source": "https://help.alpha-futures.com/en/articles/15838742-direct-account-overview"
+    },
+    {
+     "id": "direct-50",
+     "label": "Direct 50K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 1000,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día ≤ 20% para cobrar",
+     "source": "https://help.alpha-futures.com/en/articles/15838742-direct-account-overview"
+    },
+    {
+     "id": "direct-100",
+     "label": "Direct 100K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 2000,
+     "max_mini": 8,
+     "max_micro": 80,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día ≤ 20% para cobrar",
+     "source": "https://help.alpha-futures.com/en/articles/15838742-direct-account-overview"
+    },
+    {
+     "id": "direct-150",
+     "label": "Direct 150K · fondeada directa",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "eod_trailing",
+     "daily_loss_limit": 3000,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:20",
+      "tz": "America/New_York"
+     },
+     "news": "sin órdenes 2 min antes y después de noticias rojas (ForexFactory)",
+     "consistency": "mejor día ≤ 20% para cobrar",
+     "source": "https://help.alpha-futures.com/en/articles/15838742-direct-account-overview"
     }
    ]
   },
   {
    "id": "lucid",
    "name": "Lucid Trading",
-   "checked": "24/10/2026",
+   "checked": "13/11/2026",
    "source": "https://support.lucidtrading.com",
    "accounts": [
     {
@@ -964,6 +1216,146 @@
      },
      "news": "permitido",
      "consistency": "mejor día ≤ 20% para cobrar"
+    },
+    {
+     "id": "daily-eval-25",
+     "label": "LucidDaily 25K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 1000,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 600,
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "consistency": "mejor día ≤ 50% para pasar",
+     "note": "Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)",
+     "source": "https://support.lucidtrading.com/en/articles/15996664-luciddaily-evaluation"
+    },
+    {
+     "id": "daily-funded-25",
+     "label": "LucidDaily 25K · fondeada",
+     "phase": "funded",
+     "max_loss": 1000,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 600,
+     "max_mini": 2,
+     "max_micro": 20,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "note": "Límite diario solo si lo elegiste al comprar",
+     "source": "https://support.lucidtrading.com/en/articles/15997244-luciddaily-funded-account"
+    },
+    {
+     "id": "daily-eval-50",
+     "label": "LucidDaily 50K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 2000,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 1200,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "consistency": "mejor día ≤ 50% para pasar",
+     "note": "Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)",
+     "source": "https://support.lucidtrading.com/en/articles/15996664-luciddaily-evaluation"
+    },
+    {
+     "id": "daily-funded-50",
+     "label": "LucidDaily 50K · fondeada",
+     "phase": "funded",
+     "max_loss": 2000,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 1200,
+     "max_mini": 4,
+     "max_micro": 40,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "note": "Límite diario solo si lo elegiste al comprar",
+     "source": "https://support.lucidtrading.com/en/articles/15997244-luciddaily-funded-account"
+    },
+    {
+     "id": "daily-eval-100",
+     "label": "LucidDaily 100K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 3000,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 1800,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "consistency": "mejor día ≤ 50% para pasar",
+     "note": "Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)",
+     "source": "https://support.lucidtrading.com/en/articles/15996664-luciddaily-evaluation"
+    },
+    {
+     "id": "daily-funded-100",
+     "label": "LucidDaily 100K · fondeada",
+     "phase": "funded",
+     "max_loss": 3000,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 1800,
+     "max_mini": 6,
+     "max_micro": 60,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "note": "Límite diario solo si lo elegiste al comprar",
+     "source": "https://support.lucidtrading.com/en/articles/15997244-luciddaily-funded-account"
+    },
+    {
+     "id": "daily-eval-150",
+     "label": "LucidDaily 150K · evaluación",
+     "phase": "evaluation",
+     "max_loss": 4500,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 2700,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "consistency": "mejor día ≤ 50% para pasar",
+     "note": "Drawdown intradía o de fin de día y límite diario sí o no: lo elegiste al comprar (aquí, el más estricto)",
+     "source": "https://support.lucidtrading.com/en/articles/15996664-luciddaily-evaluation"
+    },
+    {
+     "id": "daily-funded-150",
+     "label": "LucidDaily 150K · fondeada",
+     "phase": "funded",
+     "max_loss": 4500,
+     "max_loss_type": "intraday_trailing",
+     "daily_loss_limit": 2700,
+     "max_mini": 10,
+     "max_micro": 100,
+     "flat_by": {
+      "time": "16:45",
+      "tz": "America/New_York"
+     },
+     "news": "noticias rojas de EE. UU.: plano desde 1 min antes hasta 1 min después (si no, se rompe la cuenta)",
+     "note": "Límite diario solo si lo elegiste al comprar",
+     "source": "https://support.lucidtrading.com/en/articles/15997244-luciddaily-funded-account"
     }
    ]
   },

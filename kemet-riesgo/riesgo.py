@@ -357,6 +357,9 @@ def _comprobar_futuro(o, ctx):
                 luego.append("stop: a menos de un tick (%s) de la entrada; un stop así no existe en la plataforma" % pts(tick))
             if objetivo is not None and ((largo and objetivo <= precio) or (not largo and objetivo >= precio)):
                 luego.append("objetivo: el objetivo %s tiene que estar %s de la entrada %s" % (pts(objetivo), "encima" if largo else "debajo", pts(precio)))
+            if ctx["sin_margen"]:
+                luego.append("drawdown: te quedan %s de drawdown (kemet/estado/cuenta.json): la cuenta está en su límite de pérdida y hoy no se abre nada"
+                             % usd(ctx["c"].get("drawdown_restante") or 0))
             if ctx["por_op"] and perdida > ctx["por_op"] + 0.005:
                 luego.append("pérdida: %d × %s pts × %s $/pt = %s al stop, más que tu riesgo por operación de %s"
                              % (n, pts(riesgo_pts), num(punto, 0), usd(perdida, 2), usd(ctx["por_op"], 2)))
@@ -530,6 +533,8 @@ def _comprobar_accion(o, ctx):
                 perdida = round((n or 0) * riesgo, 2)
                 if objetivo is not None and ((largo and objetivo <= ref + 0.005) or (not largo and objetivo >= ref - 0.005)):
                     luego.append("objetivo: el objetivo %s tiene que estar %s de la entrada %s" % (usd(objetivo, 2), "encima" if largo else "debajo", usd(ref, 2)))
+                if ctx["sin_margen"]:
+                    luego.append("drawdown: la cuenta está en su límite de pérdida (kemet/estado/cuenta.json) y hoy no se abre nada")
                 if ctx["por_op"] and perdida > ctx["por_op"] + 0.005:
                     luego.append("pérdida: %d × %s por acción = %s al stop, más que tu riesgo por operación de %s" % (n or 0, usd(riesgo, 2), usd(perdida, 2), usd(ctx["por_op"], 2)))
                 if ctx["pmd"]:
@@ -559,9 +564,10 @@ def fecha_de(ny, cfg, ordenes=()):
     return (ny.date() if acciones else comun.dia_negociacion(ny)).isoformat()
 
 
-def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None, broker=None, cartera=None, precios=None, sesion=None):
+def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None, broker=None, cartera=None, precios=None, sesion=None, cuenta=None):
     """Pura. Devuelve {"fecha", "ahora_ny", "papel", "resultados": [...], "pass", "block", "avisos", "hoy"}.
-    `broker` es kemet/estado/broker.json (lo colocado hoy), `cartera` kemet/portfolio.json y `precios` kemet/precios.json."""
+    `broker` es kemet/estado/broker.json (lo colocado hoy), `cartera` kemet/portfolio.json, `precios` kemet/precios.json y
+    `cuenta` kemet/estado/cuenta.json (lo que queda de drawdown, de tamano.py cuenta)."""
     hay_acciones = any(es_orden_accion(o) for o in ordenes)
     propia = bool(cfg) and (cfg.get("tipo_cuenta") == "propia" or cfg.get("cuenta") == "propia")
     c = dict(DEFECTO_PROPIA if (hay_acciones and not cfg) else DEFECTO)
@@ -579,6 +585,9 @@ def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None, broker=None, cart
     colocadas = colocadas_hoy(broker, fecha)
     claves_colocadas = set()
     avisos_top = []
+    if cfg:
+        c, avisos_dd = comun.con_drawdown_restante(c, cuenta, fecha)
+        avisos_top.extend(avisos_dd)
     for o in colocadas:
         s = str(o.get("simbolo") or o.get("symbol") or "").upper()
         l = str(o.get("lado") or o.get("side") or "").lower()
@@ -628,6 +637,8 @@ def check(ordenes, cfg, agenda=None, dia=None, ahora_utc=None, broker=None, cart
         avisos_top.append("sin kemet/agenda.json: no conozco los datos de hoy, solo la ventana de la apertura")
     ctx = {"c": c, "cfg": cfg, "fecha": fecha, "t": t, "agenda": agenda, "ventanas": [], "globex": comun.estado_globex(ahora_utc), "nyse": comun.estado_nyse(ahora_utc),
            "hora_limite_ny": hora_limite_ny, "mercado_cfg": (c.get("mercado") or "NQ").upper(), "pmd": pmd, "fyp": fyp, "por_op": por_op,
+           # sin drawdown que arriesgar la pérdida del día es 0: eso es «nada», no «sin límite»
+           "sin_margen": bool(cfg) and c.get("drawdown_restante") is not None and not pmd,
            "abierto": abierto, "realizada": realizada, "entradas_hoy": entradas_hoy, "lote_entradas": 0, "lote_riesgo": 0.0, "propia": propia,
            "bloqueados": {str(b).upper() for b in c.get("bloqueados") or []}, "precios": {}, "cuenta": None,
            "abiertas": [o for o in ops_hoy if isinstance(o, dict) and not o.get("cerrada")] + _posiciones_futuro(cartera)}
@@ -717,13 +728,15 @@ def cmd_check(a):
     cartera = comun.leer_json(comun.ruta("portfolio.json"), obligatorio=False)
     precios = comun.leer_json(comun.ruta("precios.json"), obligatorio=False)
     sesion = comun.leer_json("plan-sesion.json", obligatorio=False)
-    res = check(ordenes, cfg if existe else None, agenda, dia, ahora, broker, cartera, precios, sesion)
+    cuenta = comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False)
+    res = check(ordenes, cfg if existe else None, agenda, dia, ahora, broker, cartera, precios, sesion, cuenta)
     if not a.sin_escribir:
         rec = dict(res)
         rec["resultados"] = [{k: v for k, v in r.items()} for r in res["resultados"]]
         rec["comprobado"] = comun.iso(ahora)
         rec["simulado"] = bool(a.ahora)                 # un check con --ahora no vale para el bróker
         rec["dia_huella"] = comun.huella_dia(comun.leer_json(comun.ruta(DIA), obligatorio=False))
+        rec["cuenta_huella"] = comun.huella_cuenta(cuenta)
         comun.escribir_json(comun.ruta(RIESGO), rec)
     print(json.dumps(res, ensure_ascii=False, indent=1) if a.json else informe(res))
     return 1 if res["block"] else 0
@@ -782,7 +795,8 @@ def cmd_registrar(a):
     recalcular(dia)
     p = comun.escribir_json(comun.ruta(DIA), dia)
     print("Cerrada a las %s NY: %s %d %s de las %s, resultado %s" % (hora, op["lado"], op["contratos"], op["simbolo"], op["hora"], usd(op["resultado_usd"], 2)))
-    print(resumen_dia(dia, cargar_config()[0]))
+    cfg, _ = comun.con_drawdown_restante(cargar_config()[0], comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False), str(dia.get("fecha") or fecha))
+    print(resumen_dia(dia, cfg))
     return 0
 
 
@@ -802,7 +816,9 @@ def resumen_dia(dia, cfg):
     lineas.append("Operaciones: %d de %d · pérdidas: %d · riesgo abierto %s · pérdida realizada %s (neto %s)"
                   % (len(ops), fyp, fallos, usd(dia["riesgo_abierto"], 2), usd(dia["perdida_realizada"], 2), usd(dia["resultado_neto"], 2)))
     parar = []
-    if pmd and queda <= 0:
+    if not pmd and cfg.get("drawdown_restante") is not None:
+        parar.append("la cuenta está en su límite de pérdida (te quedan %s de drawdown)" % usd(cfg["drawdown_restante"]))
+    elif pmd and queda <= 0:
         parar.append("la pérdida máxima del día (%s) está agotada" % usd(pmd))
     if len(ops) >= fyp:
         parar.append("ya van %d operaciones" % len(ops))
@@ -827,6 +843,9 @@ def cmd_hoy(a):
         return 0
     if not existe:
         print("AVISO: sin kemet/config.json, pérdida máxima del día por defecto %s" % usd(DEFECTO["perdida_max_dia"]))
+    cfg, avisos_dd = comun.con_drawdown_restante(cfg, comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False), fecha)
+    for x in avisos_dd:
+        print("AVISO: " + x)
     print(resumen_dia(dia, cfg))
     return 1 if dia.get("_parar") else 0
 
