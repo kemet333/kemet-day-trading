@@ -372,7 +372,7 @@ def parse_chart(text, codigo=None):
             continue
         velas.append((int(t), float(o), float(h), float(l), float(c), int(v or 0)))
     velas.sort()
-    return {"simbolo": meta.get("symbol"), "zona": meta.get("exchangeTimezoneName"), "ts_mercado": meta.get("regularMarketTime"),
+    return {"simbolo": meta.get("symbol"), "zona": meta.get("exchangeTimezoneName"), "ts_mercado": meta.get("regularMarketTime"), "precio_mercado": meta.get("regularMarketPrice"),
             "intervalo": gran, "paso": paso, "velas": velas}
 
 

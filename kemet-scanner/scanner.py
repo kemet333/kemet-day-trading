@@ -90,6 +90,7 @@ MIN_VELAS_DIARIAS = 30
 SESIONES = 20
 UNIVERSO = "universo.txt"
 WATCHLIST = "watchlist.json"
+CORTE_FALLOS = 5               # lotes seguidos con error antes de dejar de pedir a Yahoo
 NOTA = "Un escaneo es una lista de gráficos que cumplen una regla, no una lista de valores que comprar."
 APERTURA = dt.time(9, 30)
 CIERRE = dt.time(16, 0)
@@ -773,15 +774,26 @@ def bajar_spark(simbolos, rango, intervalo, pausa, a=None):
     """Lotes de 20. -> ({SIMBOLO: serie}, {SIMBOLO: error})."""
     datos, fallidos = {}, {}
     lotes = [simbolos[i:i + SPARK_MAX] for i in range(0, len(simbolos), SPARK_MAX)]
+    seguidos = 0
     for k, lote in enumerate(lotes):
         if k and pausa:
             DORMIR(pausa)
         pedidos = {a_yahoo(s): s for s in lote}
         try:
             got = parse_spark(comun.yahoo_get(spark_path(lote, rango, intervalo)), pedidos)
+            seguidos = 0
         except (KemetError, ValueError) as e:
             for s in lote:
                 fallidos[s] = str(e)
+            seguidos += 1
+            if seguidos >= CORTE_FALLOS:
+                # Yahoo limita (429) o no hay red: seguir son cientos de peticiones y minutos para acabar sin nada
+                for resto in lotes[k + 1:]:
+                    for s in resto:
+                        fallidos[s] = "sin pedir: %d lotes seguidos fallaron (%s)" % (CORTE_FALLOS, str(e)[:80])
+                if a is not None:
+                    progreso(a, "  %d lotes seguidos fallaron: paro aquí (%s)" % (CORTE_FALLOS, str(e)[:80]))
+                break
             continue
         for s in lote:
             if s in got:
@@ -1051,6 +1063,17 @@ def cmd_orb(a):
     return 0 if aciertos else 1
 
 
+def ultima_sesion(ahora_utc):
+    """Las 16:55 NY del último día con sesión de Globex antes de ahora (el viernes, en fin de semana)."""
+    ny = comun.a_ny(ahora_utc)
+    for atras in range(0, 10):
+        d = ny.date() - dt.timedelta(days=atras)
+        cand = comun.de_ny(dt.datetime.combine(d, dt.time(16, 55)))
+        if cand <= ahora_utc and comun.estado_globex(cand)[0] == "abierto":
+            return cand
+    return ahora_utc
+
+
 def cmd_futuros(a):
     t0 = time.time()
     ahora = comun.parse_ahora(a.ahora)
@@ -1069,6 +1092,9 @@ def cmd_futuros(a):
         raise KemetError("--ib-minutos quiere un múltiplo de 5 entre 5 y 120 (60 es el del pack)")
     if not a.offline:
         progreso(a, "Bajando velas de 5 minutos de %d contratos (una petición por contrato)..." % len(codigos))
+    real = ahora
+    if comun.estado_globex(ahora)[0] == "cerrado":
+        ahora = ultima_sesion(ahora)          # fin de semana o festivo: el escaneo de la última sesión, no «sin velas de hoy»
     filas, fallidos = escanear_futuros(codigos, ahora, a.offline, a.ib_minutos, a.sesiones, a.pausa)
     aciertos = [h for h in (acierto_futuro(f) for f in filas) if h]
     recuento = {"pedidos": len(codigos), "recibidos": len(filas), "escaneados": len([f for f in filas if "ultimo" in f]),
@@ -1083,7 +1109,10 @@ def cmd_futuros(a):
     if a.json:
         print(json.dumps(dict(doc, recuento=recuento, segundos=round(time.time() - t0, 1)), indent=1, ensure_ascii=False))
         return 0 if aciertos else 1
-    estado, motivo = comun.estado_globex(ahora)
+    estado, motivo = comun.estado_globex(real)
+    if real != ahora:
+        print("Globex %s (%s): este es el escaneo de la última sesión, hasta las %s." % (estado, motivo, comun.hora_doble(ahora)))
+        estado = "abierto"
     print("Futuros, %s, %s · balance inicial de %d minutos, máximo y mínimo de ayer, rango frente al medio de %d sesiones (velas de 5 minutos de Yahoo, unos 10 minutos de retraso)"
           % (fecha_es(hoy), comun.hora_doble(ahora), a.ib_minutos, a.sesiones))
     if estado != "abierto":

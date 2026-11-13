@@ -234,7 +234,7 @@ def cierre_regular_anterior(codigo, ch5, ahora):
     return None, None
 
 
-def precio_ultimo(codigo, ahora, offline=None):
+def precio_ultimo(codigo, ahora, offline=None, desde=None):
     """El último cierre: {"simbolo", "precio", "hora_vela", "cierra", "intervalo", "retraso_min", "cierre_anterior", "fecha_cierre_anterior"}."""
     ch1, ch5 = cargar_velas(codigo, offline)
     vela = ch = None
@@ -249,19 +249,22 @@ def precio_ultimo(codigo, ahora, offline=None):
     ini = comun.utc_de_ts(vela[0])
     fin = ini + dt.timedelta(seconds=ch["paso"])
     cierre_ant, fecha_ant = cierre_regular_anterior(codigo, ch5, ahora)
-    return {"simbolo": codigo, "precio": vela[4], "hora_vela": comun.a_ny(ini).strftime("%Y-%m-%d %H:%M"),
+    # el máximo y el mínimo desde la comprobación anterior (o de la última vela): una mecha que toca el stop también cuenta
+    tramo = [b for b in comun.velas_cerradas(ch, ahora) if desde is not None and b[0] + ch["paso"] > comun.ts_de_utc(desde)] or [vela]
+    return {"simbolo": codigo, "precio": vela[4], "maximo": max(b[2] for b in tramo), "minimo": min(b[3] for b in tramo),
+            "hora_vela": comun.a_ny(ini).strftime("%Y-%m-%d %H:%M"),
             "cierra": comun.hhmm(comun.a_ny(fin)), "intervalo": ch["intervalo"],
             "retraso_min": max(0, int((ahora - fin).total_seconds() // 60)),
             "cierre_anterior": cierre_ant, "fecha_cierre_anterior": fecha_ant}
 
 
-def precios(codigos, ahora, offline=None):
+def precios(codigos, ahora, offline=None, desde=None):
     out, errores = {}, []
     for i, c in enumerate(codigos):
         try:
             if i and not offline:
                 comun._sleep(comun.PAUSE)
-            out[c] = precio_ultimo(c, ahora, offline)
+            out[c] = precio_ultimo(c, ahora, offline, desde)
         except KemetError as e:
             errores.append(str(e))
     return out, errores
@@ -332,11 +335,14 @@ def _sono_hoy(stamp, hoy):
     return comun.a_ny(utc).date().isoformat() == hoy
 
 
-def dia_con_reloj(utc, codigo=None):
-    """Las reglas de hora suenan cualquier día que no sea sábado ni festivo de cierre completo (de la NYSE si el símbolo es una acción)."""
+def dia_con_reloj(utc, codigo=None, solo_semana=False):
+    """¿Hay sesión ese día? De la NYSE si el símbolo es una acción; de CME si no. Las reglas de hora (solo_semana) suenan de
+    lunes a viernes: el domingo por la tarde abre Globex, pero no hay sesión regular ni hora de estar plano."""
     ny = comun.a_ny(utc)
     if codigo and es_accion(codigo):
         return ny.weekday() < 5 and ny.date().isoformat() not in comun.NYSE_CERRADO
+    if solo_semana and ny.weekday() >= 5:
+        return False
     return ny.weekday() != 5 and ny.date().isoformat() not in comun.CME_CERRADO
 
 
@@ -383,7 +389,7 @@ def evaluar(reglas, qs, st, cfg, estado_, ahora):
                 a = (dt.datetime.combine(dt.date(2000, 1, 1), a_firma) - dt.timedelta(minutes=ANTES_LIMITE)).time()
                 etiqueta = "hora límite de %s" % (cfg.get("cuenta_nombre") or cfg.get("firma") or "la firma")
                 detalle = "tienes que estar plano a las %s NY, %s %s" % (comun.hhmm(a_firma), cfg.get("hora_limite"), zona)
-            if ny.time() >= a and dia_con_reloj(ahora) and not _sono_hoy(sonaron.get(rid), hoy):
+            if ny.time() >= a and dia_con_reloj(ahora, codigo_de(r["simbolo"]) if r.get("simbolo") else None, solo_semana=True) and not _sono_hoy(sonaron.get(rid), hoy):
                 msg = "%s%s: son las %s NY (%s). " % (etiqueta[:1].upper(), etiqueta[1:], comun.hhmm(ny), detalle)
                 if t == "hora_limite" and ny.time() < a_firma:
                     faltan = (dt.datetime.combine(dt.date(2000, 1, 1), a_firma) - dt.datetime.combine(dt.date(2000, 1, 1), ny.time())).seconds // 60
@@ -401,7 +407,8 @@ def evaluar(reglas, qs, st, cfg, estado_, ahora):
         if t in ("encima", "debajo", "stop", "objetivo"):
             largo = r.get("lado", "largo") == "largo"
             arriba = t == "encima" or (t == "objetivo" and largo) or (t == "stop" and not largo)
-            toca = p >= r["precio"] if arriba else p <= r["precio"]
+            alto, bajo = q.get("maximo", p), q.get("minimo", p)
+            toca = alto >= r["precio"] if arriba else bajo <= r["precio"]     # la mecha cuenta: el stop de la plataforma salta con ella
             if toca and rid not in sonaron:
                 que = {"stop": "tu stop", "objetivo": "tu objetivo"}.get(t, "tu nivel")
                 toques.append({"id": rid, "simbolo": codigo, "mensaje": "%s último %s: en o por %s de %s %s%s."
@@ -563,8 +570,11 @@ def cmd_check(a):
             c = codigo_de(r["simbolo"])
             if c not in codigos:
                 codigos.append(c)
-    qs, errores = precios(codigos, ahora, a.offline) if codigos else ({}, [])
     estado_ = _leer(ruta_estado, {})
+    desde = comun.de_iso(estado_.get("ultima_comprobacion"))
+    if desde and (ahora - desde).total_seconds() > 3 * 3600:
+        desde = None                          # de otra sesión: solo la última vela
+    qs, errores = precios(codigos, ahora, a.offline, desde) if codigos else ({}, [])
     toques, estado_ = evaluar(reglas, qs, st, cfg, estado_, ahora)
     if not a.sin_escribir:
         comun.escribir_json(ruta_estado, estado_)
