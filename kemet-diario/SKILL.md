@@ -81,8 +81,12 @@ por operación es el del config y no hay hora límite de firma (sale «no medibl
 
 ## Pasos
 
-1. Pide el CSV o ayúdale a hacerlo con `plantilla`. Si exporta de su plataforma, basta con renombrar
-   columnas; no hace falta que lo rellene a mano.
+1. Pide el CSV o ayúdale a hacerlo con `plantilla`. Una exportación de su plataforma no entra tal cual: cada
+   una tiene sus columnas (Tradovate no trae el lado, NinjaTrader usa «Market pos.», Alpaca exporta fills sin
+   emparejar). Ayúdale a convertirla a una fila por operación con las columnas de `plantilla` (lee el archivo,
+   empareja entradas y salidas, escribe el CSV nuevo y enséñale las primeras filas antes de revisar). Las cifras
+   con formato de EE. UU. (1,234.50) y las fechas mes/día se detectan solas; si el archivo no lo deja claro, el
+   aviso lo dice y `--decimal punto` o `--fechas mdy` lo fijan.
 2. Si hay `kemet/config.json`, la revisión mide el tamaño y la pérdida máxima del día con sus reglas; si no,
    dilo y ofrece `tamano.py config`. Si quiere medir las ventanas de datos de un día, `plan.py agenda` con
    los datos de ese día.

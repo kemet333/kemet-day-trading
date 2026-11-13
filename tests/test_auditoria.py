@@ -17,6 +17,7 @@ from _load import load  # noqa: E402
 
 riesgo, broker, comun = tr.riesgo, tb.broker, tr.comun
 tamano = load("kemet-tamano", "tamano")
+diario = load("kemet-diario", "diario")
 
 
 class Puerta(tr.Base):
@@ -189,6 +190,39 @@ class Tamano(unittest.TestCase):
         for ny, estado in (("2026-11-26 14:00", "pausa"), ("2026-11-27 13:30", "cerrado"), ("2026-12-24 19:00", "cerrado"),
                            ("2026-12-31 19:00", "cerrado"), ("2026-11-26 10:00", "abierto")):
             self.assertEqual(comun.estado_globex(comun.parse_ahora(ny))[0], estado, ny)
+
+
+class Diario(unittest.TestCase):
+    def leer(self, texto, **kw):
+        d = tempfile.mkdtemp(prefix="kemet-diario-")
+        try:
+            p = os.path.join(d, "ops.csv")
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(texto)
+            return diario.leer_csv(p, **kw)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    def test_una_accion_no_es_un_futuro(self):
+        ops, _ = self.leer("fecha,hora,simbolo,lado,contratos,entrada,salida,stop\n2026-11-02,10:00,CLF,largo,100,12.50,12.60,12.40\n"
+                           "2026-11-02,10:05,MNQZ6,largo,1,28000,28010,27990\n")
+        self.assertEqual((ops[0]["mercado"], ops[0]["pnl"]), ("CLF", 10.0))   # antes CL a 1.000 $/pt: 10.000 $
+        self.assertEqual(ops[1]["mercado"], "NQ")
+
+    def test_miles_y_fechas_de_eeuu(self):
+        ops, avisos = self.leer('fecha,hora,simbolo,lado,contratos,entrada,salida,stop,pnl\n11/02/2026,9:52 AM,NQ,largo,1,"26,812","26,880","26,772","1,360"\n'
+                                '11/13/2026,10:05 AM,NQ,largo,1,"26,812.25","26,880","26,772","1,355"\n')
+        self.assertEqual([o["fecha"].isoformat() for o in ops], ["2026-11-02", "2026-11-13"])
+        self.assertEqual((ops[0]["entrada"], ops[0]["pnl"], ops[0]["hora"].strftime("%H:%M")), (26812.0, 1360.0, "09:52"))
+
+    def test_formato_espanol_sigue_igual(self):
+        ops, _ = self.leer("fecha;hora;simbolo;lado;contratos;entrada;salida;stop\n02/11/2026;10:00;MNQ;largo;2;28.426,25;28.440,50;28.400\n")
+        self.assertEqual((ops[0]["fecha"].isoformat(), ops[0]["entrada"]), ("2026-11-02", 28426.25))
+
+    def test_cantidad_rara_avisa(self):
+        ops, avisos = self.leer("fecha,hora,simbolo,lado,contratos,entrada,salida,stop\n2026-11-02,10:00,MNQ,corto,-2,28000,27990,28010\n")
+        self.assertEqual(ops[0]["contratos"], 2)
+        self.assertTrue(any("cantidad -2" in a for a in avisos))
 
 
 class Velas(unittest.TestCase):
