@@ -106,7 +106,7 @@ All standard-library Python, polite with the free endpoints (one request every h
 
 ```bash
 python3 kemet-scanner/scanner.py universo                              # -> kemet/universo.txt (~5,900 US stocks)
-python3 kemet-scanner/scanner.py diario                                # pre-market setups -> kemet/watchlist.json
+python3 kemet-scanner/scanner.py diario                                # daily-close setups before the open -> kemet/watchlist.json
 python3 kemet-scanner/scanner.py orb --a 10:15                         # opening-range breakouts so far
 python3 kemet-scanner/scanner.py futuros                               # the twelve contracts
 python3 kemet-noticias/noticias.py --tickers TSLA --horas 12           # headlines, 8-Ks, today's move, macro calendar

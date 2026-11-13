@@ -2,16 +2,14 @@
 name: kemet-resultados
 description: >-
   Los resultados que una empresa de EE. UU. presentó de verdad en la SEC, trimestre a trimestre y en español:
-  ingresos, márgenes bruto, operativo y neto, beneficio neto, BPA diluido y flujo de caja operativo si la empresa lo
-  etiqueta, cada trimestre frente al mismo trimestre del año anterior, los últimos cuatro sumados, el cuarto
-  trimestre derivado del 10-K y marcado como tal. Lee los hechos XBRL de EDGAR (companyfacts), el último 10-Q o 10-K,
-  el último 8-K de resultados con su nota de prensa y estima cuándo toca el próximo informe. Cifras en formato
-  español, millones con M. Escribe kemet/resultados.json y una fila por empresa en un JSON de métricas. Nunca dice
-  si la acción es compra o venta. Úsala cuando el usuario diga «qué tal los resultados de Tesla», «cuánto creció
-  Apple», «está ganando dinero esta empresa», «mira el 10-Q», «compárame los márgenes», «cuándo presenta
-  resultados», «hay resultados esta semana», o antes de operar una acción cerca de su informe. Va después de
-  kemet-scanner o de que el usuario nombre un ticker, y antes de kemet-entrada y kemet-salida, que necesitan saber si
-  el próximo informe cae dentro de la operación.
+  ingresos, márgenes bruto, operativo y neto, beneficio neto, BPA diluido y flujo de caja operativo si la
+  empresa lo etiqueta, cada trimestre frente al mismo del año anterior, los últimos cuatro sumados y el cuarto
+  trimestre derivado del 10-K. Lee los datos de EDGAR, el último 10-Q o 10-K y el último 8-K de resultados, y
+  estima cuándo toca el próximo informe. Nunca dice si la acción es compra o venta. Úsala cuando el usuario
+  diga «qué tal los resultados de Tesla», «cuánto creció Apple», «está ganando dinero esta empresa», «mira el
+  10-Q», «compárame los márgenes», «cuándo presenta resultados», «hay resultados esta semana», o antes de
+  operar una acción cerca de su informe. Va después de kemet-scanner o de que el usuario nombre un ticker, y
+  antes de kemet-entrada y kemet-salida, que necesitan saber si el próximo informe cae dentro de la operación.
 argument-hint: "TSLA [AAPL ...] [--trimestres 8] [--metricas kemet/metricas.json] [--escribir]"
 ---
 

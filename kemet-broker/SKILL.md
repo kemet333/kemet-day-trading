@@ -1,18 +1,16 @@
 ---
 name: kemet-broker
 description: >-
-  La única skill del pack que puede acabar en una orden puesta, y por eso la más estricta. Convierte cada orden de
-  kemet/orden.json en un ticket en palabras llanas (una bracket enseña su stop-loss, su take-profit y la pérdida al
-  stop) y la marca LISTA solo si kemet-riesgo le dio PASS hoy a esa orden exacta, por su huella. Claude lee el ticket
-  al usuario, espera un sí explícito para ese ticket en el chat, lo apunta palabra por palabra y solo entonces llama al
-  conector del bróker: Alpaca por su servidor MCP oficial, cuenta papel por defecto, con la herramienta en «Necesita
-  aprobación» para que la tarjeta de Claude vuelva a preguntar. Apunta el fill en kemet/estado/broker.json y en
-  kemet/portfolio.json, y construye la orden que cierra una posición antes de la hora de estar plano. Para futuros no
-  hay conector gratuito: el ticket se enseña igual y la operación la pone el usuario en su plataforma. Cubre cómo
-  instalar el servidor de Alpaca en Claude Desktop y Claude Code con las claves en el archivo de configuración, nunca
-  en el chat. Úsala cuando el usuario diga «pon la orden», «cómprala», «envíala al bróker», «ejecuta», «cierra la
-  posición», «sácame», «ponme plano», «conecta Alpaca», «quiero operar en papel», o siempre después de un PASS de
-  kemet-riesgo.
+  La única skill del pack que puede acabar en una orden puesta, y por eso la más estricta. Convierte cada
+  orden propuesta en un ticket en palabras llanas (con su stop, su objetivo y la pérdida al stop) y solo la da
+  por lista si kemet-riesgo le dio PASS hoy a esa orden exacta. Claude lee el ticket al usuario, espera un sí
+  explícito para ese ticket en el chat y solo entonces llama al conector del bróker: Alpaca por su servidor
+  MCP oficial, cuenta papel por defecto, con la herramienta en «Necesita aprobación». Apunta el fill y
+  construye la orden que cierra una posición antes de la hora de estar plano. Para futuros no hay conector
+  gratuito: el ticket se enseña igual y la operación la pone el usuario en su plataforma. Las claves van en la
+  configuración, nunca en el chat. Úsala cuando el usuario diga «pon la orden», «envíala al bróker»,
+  «ejecuta», «cierra la posición», «ponme plano», «conecta Alpaca», «quiero operar en papel», o siempre
+  después de un PASS de kemet-riesgo.
 argument-hint: "[mostrar | aprobar --huella H --respuesta «sí» | registrar --huella H --id-broker ID --precio P | plano --simbolo TSLA]"
 ---
 

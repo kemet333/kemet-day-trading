@@ -1,22 +1,16 @@
 ---
 name: kemet-scanner
 description: >-
-  El escáner de gráficos. Recorre miles de acciones de EE. UU. y los doce
-  futuros de CME y lista los gráficos que cumplen una regla: construye el
-  universo de acciones ordinarias y ADR desde los directorios de Nasdaq
-  Trader, escanea antes de la apertura los cierres diarios (ruptura del máximo
-  de cierre de 20 días, bandera alcista, recupera la media de 20 días,
-  sobreventa por RSI 14, rebote), busca durante la sesión las rupturas del
-  rango de apertura de 15 minutos sobre velas de 5 minutos, y en futuros dice
-  quién cerró fuera del balance inicial de la primera hora, quién está por
-  encima del máximo de ayer o por debajo del mínimo, y el rango de hoy frente
-  al medio de 20 sesiones. Datos gratis de Yahoo, vela a vela. Escribe
-  kemet/universo.txt y kemet/watchlist.json para kemet-noticias y
-  kemet-entrada. Úsala cuando el usuario diga "escanea el mercado", "qué está
-  rompiendo", "busca rupturas del rango de apertura", "banderas", "valores en
-  sobreventa", "escaneo de premercado", "hazme la watchlist", "qué miro hoy",
-  "qué futuros se mueven", "quién ha roto el balance inicial", o al empezar
-  el día, antes de kemet-noticias y kemet-niveles.
+  El escáner de gráficos. Recorre miles de acciones de EE. UU. y los doce futuros de CME y lista los gráficos
+  que cumplen una regla. En acciones, antes de abrir, escanea los cierres diarios (ruptura del máximo de
+  cierre de 20 días, bandera alcista, recupera la media de 20 días, sobreventa por RSI 14, rebote) y, ya en
+  sesión (a las 10:15 NY, el clásico), las rupturas del rango de apertura de 15 minutos. En futuros dice quién
+  cerró fuera del balance inicial de la primera hora, quién está por encima del máximo de ayer o por debajo
+  del mínimo, y el rango de hoy frente al medio de 20 sesiones. Datos gratis de Yahoo. Deja la watchlist para
+  kemet-noticias y kemet-entrada. Úsala cuando el usuario diga «escanea el mercado», «qué está rompiendo»,
+  «busca rupturas del rango de apertura», «banderas», «valores en sobreventa», «hazme la watchlist», «qué miro
+  hoy», «qué futuros se mueven», «quién ha roto el balance inicial», o al empezar el día, antes de
+  kemet-noticias y kemet-niveles.
 argument-hint: "[universo | diario | orb [--a HH:MM] | futuros] [--offline RUTA] [--ahora \"AAAA-MM-DD HH:MM\"]"
 ---
 

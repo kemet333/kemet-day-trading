@@ -31,7 +31,7 @@ sus reglas. Cada script va en su carpeta: `python3 "${CLAUDE_SKILL_DIR}/kemet-ta
 | skill | hace | cuándo |
 | --- | --- | --- |
 | `/kemet-desk` | esta: sitúa, elige y encadena | siempre la primera |
-| `/kemet-scanner` | barre miles de acciones (y los doce futuros): qué rompió, qué está sobre el máximo de ayer; escribe la watchlist | antes de abrir y a las 10:15 |
+| `/kemet-scanner` | barre miles de acciones (cierres diarios y rango de apertura) y los doce futuros (balance inicial, máximo y mínimo de ayer); escribe la watchlist | antes de abrir y a las 10:15 |
 | `/kemet-noticias` | titulares y 8-K por ticker con hora y etiqueta, y la agenda macro del día | antes de entrar en algo |
 | `/kemet-niveles` | máximo, mínimo y cierre de ayer, rango nocturno, apertura, balance inicial | antes de abrir y a las 10:30 |
 | `/kemet-plan` | el plan escrito: franjas, ventanas de datos, semáforo, niveles, tamaño, hora límite | antes de abrir |

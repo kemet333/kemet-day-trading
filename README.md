@@ -61,7 +61,7 @@ Hace falta Python 3.8 o más nuevo. Nada que instalar con pip. Funciona en Mac, 
 | comando | qué es | qué hace |
 | --- | --- | --- |
 | `/kemet-desk` | El desk | Te sitúa (mercado, cuenta, stop, horario), elige la pieza y las encadena en orden. |
-| `/kemet-scanner` | Scanner | Barre miles de acciones (universo de Nasdaq Trader) antes de abrir y a las 10:15, y los doce futuros: qué rompió, qué está sobre el máximo de ayer. |
+| `/kemet-scanner` | Scanner | Barre miles de acciones (universo de Nasdaq Trader) antes de abrir y a las 10:15, con cierres diarios y el rango de apertura, y los doce futuros con su balance inicial y el máximo y mínimo de ayer. |
 | `/kemet-noticias` | Noticias | Titulares y filings 8-K por ticker con hora y etiqueta, y la agenda macro del día, en un solo sitio. |
 | `/kemet-niveles` | Niveles | Máximo, mínimo y cierre de ayer, rango nocturno, apertura y balance inicial, y dónde está el precio. |
 | `/kemet-plan` | Plan de sesión | El plan escrito: franjas, ventanas de datos en las que no se opera, semáforo, niveles, tamaño, hora límite de tu firma. |

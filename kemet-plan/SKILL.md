@@ -1,25 +1,16 @@
 ---
 name: kemet-plan
 description: >-
-  Plan de sesión escrito antes de abrir, para futuros intradía (ES, NQ, CL,
-  GC) en cuentas de fondeo y para acciones de EE. UU. (TSLA, AAPL) con la
-  cuenta propia. Junta en una pantalla las franjas de la sesión de
-  Nueva York con su hora en Madrid, las ventanas en las que no se opera (10
-  minutos a cada lado de cada dato de la agenda del día, 20 si es fuerte, la
-  apertura 09:30 a 09:45 y los minutos antes de estar plano), el semáforo del
-  día con sus razones, los niveles de ayer y de la noche, el tamaño por
-  operación con la regla Kemet (un cuarto del drawdown o el límite diario de la
-  firma, la mitad en ámbar, entre tres fallos, con tu stop) y la hora límite de
-  la firma. Con una acción y la cuenta propia, el tamaño va en acciones
-  enteras con el stop en dólares por acción, sin hora límite de firma y sin
-  niveles de la noche. El subcomando agenda guarda los datos del día desde
-  flags o los baja del calendario semanal gratuito de Forex Factory (--auto).
-  Escribe kemet/plan-sesion.json. Úsala cuando el usuario diga "hazme el plan
-  de hoy", "qué datos salen hoy", "a qué hora no opero", "cuántos contratos
-  hoy con stop de 40", "cuántas acciones de TSLA con stop de 3 dólares", "plan
-  de sesión", "qué semáforo tenemos", "apunta que a las 8:30 sale el IPC", o
-  antes de la apertura, después de kemet-niveles y antes de kemet-entrada y
-  kemet-riesgo.
+  Plan de sesión escrito antes de abrir, para futuros intradía (ES, NQ, CL, GC) en cuentas de fondeo y para
+  acciones de EE. UU. con la cuenta propia. Junta las franjas de Nueva York con su hora en Madrid, las
+  ventanas sin operar (alrededor de cada dato de la agenda, la apertura 09:30 a 09:45 y los minutos antes de
+  estar plano), el semáforo del día, los niveles de ayer y de la noche, el tamaño por operación con la regla
+  Kemet y la hora límite de la firma. Con una acción, el tamaño va en acciones enteras con el stop en dólares
+  por acción, sin hora límite ni niveles de la noche. También guarda la agenda de datos del día, a mano o
+  desde el calendario gratuito de Forex Factory. Úsala cuando el usuario diga «hazme el plan de hoy», «qué
+  datos salen hoy», «a qué hora no opero», «cuántos contratos hoy con stop de 40», «cuántas acciones de TSLA
+  con stop de 3 dólares», «apunta que a las 8:30 sale el IPC», o antes de la apertura, después de
+  kemet-niveles y antes de kemet-entrada y kemet-riesgo.
 argument-hint: "plan [--mercado NQ|TSLA] [--stop PTS] [--semaforo verde|ambar|rojo] [--escribir] | agenda --fecha AAAA-MM-DD --dato \"08:30 IPC fuerte\""
 ---
 

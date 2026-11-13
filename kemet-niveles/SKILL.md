@@ -1,22 +1,15 @@
 ---
 name: kemet-niveles
 description: >-
-  Niveles de sesión de futuros (ES, NQ, CL, GC) y de acciones de EE. UU. (TSLA,
-  cualquier ticker) con velas de 5 minutos gratis de Yahoo, sin clave. Calcula
-  lo que un trader intradía marca antes de abrir y no
-  tendría que teclear: máximo, mínimo y cierre de la sesión regular anterior
-  (PDH, PDL, PDC), rango nocturno desde las 18:00 de Nueva York (ONH, ONL),
-  apertura de 15 minutos (ORH, ORL), balance inicial de la primera hora (IBH,
-  IBL, solo cuando ya cerró), máximo y mínimo de hoy, el rango medio de las
-  últimas 20 sesiones regulares (contexto para el stop) y dónde está el último
-  precio respecto a cada nivel. En una acción no hay noche: máximo, mínimo y
-  cierre de ayer, apertura y balance inicial de 15 minutos, hoy y el rango
-  medio, al céntimo. Escribe kemet/niveles.json para kemet-plan y
-  kemet-entrada. Niveles, no señales: sin dirección ni objetivos. Úsala cuando
-  el usuario diga "qué niveles marco", "dame el máximo y el mínimo de ayer",
-  "dónde cerró el NQ", "rango nocturno", "cuál es el balance inicial", "dónde
-  está el precio respecto a ayer", "niveles del ES y del crudo", "niveles de
-  TSLA", o al empezar el día antes de kemet-plan.
+  Niveles de sesión de futuros (ES, NQ, CL, GC) y de acciones de EE. UU. (TSLA, cualquier ticker) con velas de
+  5 minutos gratis de Yahoo, sin clave. Calcula lo que un trader intradía marca antes de abrir: máximo, mínimo
+  y cierre de la sesión regular anterior (PDH, PDL, PDC), rango nocturno desde las 18:00 de Nueva York (ONH,
+  ONL), apertura de 15 minutos (ORH, ORL), balance inicial de la primera hora (IBH, IBL, solo cuando ya
+  cerró), máximo y mínimo de hoy, el rango medio de las últimas 20 sesiones y dónde está el último precio
+  respecto a cada nivel. En una acción no hay noche y el balance inicial es de 15 minutos, al céntimo.
+  Niveles, no señales: sin dirección ni objetivos. Úsala cuando el usuario diga «qué niveles marco», «dame el
+  máximo y el mínimo de ayer», «dónde cerró el NQ», «rango nocturno», «cuál es el balance inicial», «dónde
+  está el precio respecto a ayer», «niveles de TSLA», o al empezar el día antes de kemet-plan.
 argument-hint: "[--mercado ES|NQ|CL|GC|TSLA] [--ib-minutos 60|15] [--todos] [--escribir] [--ahora \"AAAA-MM-DD HH:MM\"]"
 ---
 
