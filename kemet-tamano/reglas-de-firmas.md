@@ -116,9 +116,7 @@ Fuente: https://support.lucidtrading.com
 
 ## Apex Trader Funding · comprobado el 13/11/2026
 
-Fuentes: https://apextraderfunding.com/help-center/additional-helpful-items/position-sizing-evaluation/ (evaluación) y https://apextraderfunding.com/help-center/eod-trailing-drawdown-accounts/scaling-levels-pa-explained/ (PA)
-
-En las PA el tope de contratos y el límite diario van por niveles según el saldo de cierre; aquí está el nivel 1, el de partida. 10 micros = 1 mini.
+Fuente: https://apextraderfunding.com/help-center/additional-helpful-items/position-sizing-evaluation/
 
 | Cuenta | Fase | Drawdown | Límite diario | Máx. contratos | Hora límite | Noticias | Consistencia |
 |---|---|---|---|---|---|---|---|
