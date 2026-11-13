@@ -77,7 +77,11 @@ o la carpeta `tests/fixtures/yahoo`), `--ahora "2026-11-11 16:30"` (hora de Nuev
    cuántas veces llegó antes el objetivo. Un objetivo más lejano necesita ganar menos veces para empatar: 1 entre
    (1 + R), el 50 % a 1R, el 33 % a 2R, el 25 % a 3R. A menos de 5 puntos del empate: «Casi una moneda al aire» a
    1R, «Casi en el punto de equilibrio» con otra R. De 5 a 15 puntos: «Se inclina hacia el objetivo» o «Se inclina
-   hacia el stop». 15 o más: «Claramente hacia» uno de los dos. Un plan a 2R con objetivo primero 24 % y stop
+   hacia el stop». 15 o más: «Claramente hacia» uno de los dos. Antes de eso, la máquina repite la simulación 30
+   veces con las sesiones remuestreadas (otras 45 o 60 sesiones igual de plausibles) y saca el intervalo del 90 % de
+   esa parte: si el empate cae dentro, el veredicto es «No se distingue de una moneda al aire» (o «del punto de
+   equilibrio»), diga lo que diga la cifra suelta. La historia lleva su intervalo del 90 % (Wilson): 14 objetivos
+   contra 13 stops no dicen nada. Un plan a 2R con objetivo primero 24 % y stop
    primero 50 % está casi en el punto de equilibrio (necesita el 33 % de las que tocan un lado y tiene el 32 %), no
    es un plan perdedor.
 6. **Debajo del veredicto**, cuando toca: una línea si más del 40 % de las repeticiones no toca ningún lado (el
@@ -131,9 +135,9 @@ Cada vela sale entera de las velas de 5 minutos de NQ a la misma hora del día (
   Precio a las 15:55: mediana 28.420,61, el 90 % de las repeticiones entre 28.134,90 y 28.726,42.
   R media: -0,007 (1R = 117,25 pts; +1R en el objetivo, -1R en el stop).
 
-Historia: la misma regla (IB de 60 minutos, primera vela cerrada fuera del IB entre las 09:45 y las 15:00, entrada en su cierre, stop en el punto medio del IB, objetivo 1R, plano a la hora de --hasta) en esas 46 sesiones reales disparó 39 veces (23 largos, 16 cortos; 7 sesiones sin cierre fuera del IB): 14 objetivo, 13 stop, 12 ninguno a las 15:55. R media +0,038.
+Historia: la misma regla (IB de 60 minutos, primera vela cerrada fuera del IB entre las 09:45 y las 15:00, entrada en su cierre, stop en el punto medio del IB, objetivo 1R, plano a la hora de --hasta) en esas 46 sesiones reales disparó 39 veces (23 largos, 16 cortos; 7 sesiones sin cierre fuera del IB): 14 objetivo, 13 stop, 12 ninguno a las 15:55. R media +0,038. Con tan pocas, la parte del objetivo entre las que tocan un lado puede ir del 37 % al 67 % (90 %).
 
-Casi una moneda al aire: objetivo primero 45,5 % frente a stop primero 46,3 %.
+No se distingue de una moneda al aire: objetivo primero 45,5 % frente a stop primero 46,3 %, pero con otras sesiones igual de plausibles la parte del objetivo va del 40 % al 59 % (intervalo del 90 %) y el equilibrio, 50 %, está dentro.
 
 Fuera del pool 2 sesión(es) corta(s) (recortadas o con huecos): 30/10/2026, 05/11/2026.
 Simulación hecha con las últimas 46 sesiones completas de NQ. No es una predicción: un dato, una noticia o un día de pánico hacen lo que esas sesiones no hicieron. Misma semilla, mismos números. Repite esta corrida con --semilla 19.
@@ -192,9 +196,9 @@ Cada vela sale entera de las velas de 5 minutos de TSLA a la misma hora del día
   Precio a las 15:55: mediana 392,99, el 90 % de las repeticiones entre 383,60 y 402,15.
   R media: +0,113 (1R = 3,57 $; +1R en el objetivo, -1R en el stop).
 
-Historia: la misma regla (IB de 15 minutos, primera vela cerrada fuera del IB entre las 09:45 y las 15:00, entrada en su cierre, stop en el punto medio del IB, objetivo 1R, plano a la hora de --hasta) en esas 57 sesiones reales disparó 51 veces (30 largos, 21 cortos; 6 sesiones sin cierre fuera del IB): 16 objetivo, 18 stop, 17 ninguno a las 15:55. R media -0,056.
+Historia: la misma regla (IB de 15 minutos, primera vela cerrada fuera del IB entre las 09:45 y las 15:00, entrada en su cierre, stop en el punto medio del IB, objetivo 1R, plano a la hora de --hasta) en esas 57 sesiones reales disparó 51 veces (30 largos, 21 cortos; 6 sesiones sin cierre fuera del IB): 16 objetivo, 18 stop, 17 ninguno a las 15:55. R media -0,056. Con tan pocas, la parte del objetivo entre las que tocan un lado puede ir del 34 % al 61 % (90 %).
 
-Se inclina hacia el objetivo: objetivo primero 52,6 % frente a stop primero 41,3 %.
+No se distingue de una moneda al aire: objetivo primero 52,6 % frente a stop primero 41,3 %, pero con otras sesiones igual de plausibles la parte del objetivo va del 47 % al 65 % (intervalo del 90 %) y el equilibrio, 50 %, está dentro.
 
 Fuera del pool 1 sesión(es) corta(s) (recortadas o con huecos): 05/11/2026.
 Simulación hecha con las últimas 57 sesiones completas de TSLA. No es una predicción: un dato, una noticia o un día de pánico hacen lo que esas sesiones no hicieron. Misma semilla, mismos números. Repite esta corrida con --semilla 19.

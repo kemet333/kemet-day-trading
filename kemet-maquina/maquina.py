@@ -49,6 +49,9 @@ el 67 % a 0,5R. La diferencia, en puntos porcentuales:
   menos de 5 puntos    "Casi una moneda al aire" (1R) / "Casi en el punto de equilibrio" (otra R)
   de 5 a 15 puntos     "Se inclina hacia el objetivo" / "Se inclina hacia el stop"
   15 puntos o más      "Claramente hacia el objetivo" / "Claramente hacia el stop"
+Antes de esas tres, el intervalo: la simulación se repite 30 veces con las sesiones del pool remuestreadas con reemplazo
+(800 repeticiones cada vez) y, si el intervalo del 90 % de esa parte contiene el empate, el veredicto es «No se distingue de
+una moneda al aire» (1R) o «del punto de equilibrio». La historia lleva el intervalo del 90 % de Wilson de su parte del objetivo.
 Debajo: una nota cuando más del 40 % de las repeticiones no toca ningún lado (el precio a --hasta decide esas), y
 la R media cuando su signo va contra la inclinación.
 
@@ -85,6 +88,8 @@ CAJAS = 24
 MONEDA = 0.05          # umbrales del veredicto, ver el docstring
 CLARO = 0.15
 MUCHOS_NINGUNO = 0.40
+REMUESTREOS = 30       # tiradas del intervalo: cada una con las sesiones remuestreadas con reemplazo
+REPS_REMUESTREO = 800  # repeticiones por tirada
 IB_MINUTOS = 60
 IB_MINUTOS_ACCION = 15
 SIN_ENTRADAS_ANTES = "09:45"
@@ -184,6 +189,34 @@ def construir_pool(sesiones, n):
             pc = D[i - 1][4]
             pool[i].append((D[i][1] / pc, D[i][2] / pc, D[i][3] / pc, D[i][4] / pc))
     return pool
+
+
+def intervalo_parte(sesiones, n, entrada, stop, objetivo, k, last, semilla, ventana, largo, tiradas=REMUESTREOS, reps=REPS_REMUESTREO):
+    """El intervalo del 90 % de la parte del objetivo (objetivo / (objetivo + stop)) si las sesiones del pool hubieran sido
+    otras igual de plausibles: se remuestrean las sesiones con reemplazo y se repite la simulación. Las 10.000 repeticiones
+    dan una cifra estable con la semilla; lo que no se sabe es cuánto depende de qué 45 o 60 días tocaron. Esto lo mide."""
+    rng = random.Random(semilla * 7919 + 1)
+    partes = []
+    for b in range(tiradas):
+        muestra = [sesiones[rng.randrange(len(sesiones))] for _ in sesiones]
+        m = simular(construir_pool(muestra, n), entrada, stop, objetivo, k, last, reps, semilla + 101 + b, ventana, largo)
+        if m["objetivo_primero"] + m["stop_primero"] > 0:
+            partes.append(m["objetivo_primero"] / (m["objetivo_primero"] + m["stop_primero"]))
+    if len(partes) < tiradas // 2:
+        return None
+    partes.sort()
+    return round(pct(partes, 0.05), 4), round(pct(partes, 0.95), 4)
+
+
+def wilson(aciertos, n, z=1.645):
+    """Intervalo del 90 % de una proporción (Wilson): 14 de 27 no es lo mismo que 140 de 270."""
+    if not n:
+        return None
+    p = aciertos / float(n)
+    den = 1 + z * z / n
+    centro = (p + z * z / (2 * n)) / den
+    margen = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / den
+    return round(max(0.0, centro - margen), 4), round(min(1.0, centro + margen), 4)
 
 
 def pct(a, q):
@@ -533,6 +566,13 @@ def veredicto(mc):
     d, parte, equilibrio = lv
     r = mc.get("r_objetivo") or 1.0
     una_r = abs(r - 1.0) < 0.005
+    ic = mc.get("intervalo_90")
+    if ic and ic[0] <= equilibrio <= ic[1]:
+        # con otras sesiones igual de plausibles la parte del objetivo cruza el equilibrio: no se puede decir hacia dónde va
+        cabeza = "No se distingue de una moneda al aire" if una_r else "No se distingue del punto de equilibrio"
+        return ("%s: objetivo primero %s frente a stop primero %s, pero con otras sesiones igual de plausibles la parte del objetivo "
+                "va del %s al %s (intervalo del 90 %%) y el equilibrio, %s, está dentro."
+                % (cabeza, pc(po), pc(ps), pc(ic[0], 0), pc(ic[1], 0), pc(equilibrio, 0)))
     if abs(d) < MONEDA:
         cabeza = "Casi una moneda al aire" if una_r else "Casi en el punto de equilibrio"
     elif abs(d) < CLARO:
@@ -623,6 +663,7 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
                       % (fecha_es(fecha), recortados[fecha.isoformat()], hhmm_min(z)))
     pool = construir_pool(sesiones, n)
     mc = simular(pool, plan["entrada"], plan["stop"], plan["objetivo"], k, last, repeticiones, semilla, ventana, plan["lado"] == "largo")
+    mc["intervalo_90"] = intervalo_parte(sesiones, n, plan["entrada"], plan["stop"], plan["objetivo"], k, last, semilla, ventana, plan["lado"] == "largo")
     mc.update(hasta=hhmm_min(a + 5 * (last + 1)), sesiones_pool=len(sesiones), pool_desde=sesiones[0][0].isoformat(),
               pool_hasta=sesiones[-1][0].isoformat(), horas_bandas=[hhmm_min(a + 5 * (j + 1)) for j in range(k, last + 1)])
     ib_dia = comun.balance_inicial(codigo, dia_plan, fecha, plan["ib_minutos"]) if dia_plan else None
@@ -630,6 +671,8 @@ def maquina(ch, plan, ahora, repeticiones=10000, semilla=19, ventana=2, hasta=No
     avisos += regla["avisos"]
     historia = historia_regla(codigo, sesiones, regla, plan, last)
     historia["descripcion"] = describir_regla(regla, plan)
+    tocan = historia.get("objetivo", 0) + historia.get("stop", 0)
+    historia["intervalo_90"] = wilson(historia.get("objetivo", 0), tocan) if tocan else None
     plan_out = dict(plan, regla_stop=regla["regla_stop"], regla_objetivo=regla["regla_objetivo"])
     plan_out.pop("notas", None)
     ultima = velas_[-1]
@@ -689,7 +732,9 @@ def informe(doc, ahora=None):
         lineas.append("Historia: %s en esas %d sesiones reales disparó %d veces (%d largos, %d cortos; %d sesiones sin cierre fuera del IB): "
                       "%d objetivo, %d stop, %d ninguno a las %s. R media %s."
                       % (h["descripcion"], h["sesiones"], h["disparos"], h["largos"], h["cortos"], h["sin_disparo"],
-                         h["objetivo"], h["stop"], h["ninguno"], hasta, signo(h["r_media"])))
+                         h["objetivo"], h["stop"], h["ninguno"], hasta, signo(h["r_media"]))
+                      + ((" Con tan pocas, la parte del objetivo entre las que tocan un lado puede ir del %s al %s (90 %%)."
+                          % (pc(h["intervalo_90"][0], 0), pc(h["intervalo_90"][1], 0))) if h.get("intervalo_90") else ""))
     else:
         lineas.append("Historia: %s no disparó en ninguna de esas %d sesiones." % (h["descripcion"], h["sesiones"]))
     lineas += ["", doc["veredicto"]] + list(doc.get("notas") or []) + [""]
