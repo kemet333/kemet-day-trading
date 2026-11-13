@@ -126,10 +126,11 @@ def calcular(codigo, ch, ahora_utc, ib_minutos=None):
     rth = comun.regular(codigo, velas_hoy, hoy)
     ahora_ts = comun.ts_de_utc(ahora_utc)
     if rth:
-        if ahora_ts >= t_ap + 15 * 60:
-            doc["orh"], doc["orl"] = comun.rango([b for b in rth if b[0] < t_ap + 15 * 60])
+        apertura15 = [b for b in rth if b[0] < t_ap + 15 * 60]
+        if ahora_ts >= t_ap + 15 * 60 and len(apertura15) >= 3:      # las tres velas de 5 minutos, no solo el reloj
+            doc["orh"], doc["orl"] = comun.rango(apertura15)
         ib = comun.balance_inicial(codigo, velas_hoy, hoy, ib_minutos)
-        if ib:
+        if ib and ib.get("completo", True):
             doc["ibh"], doc["ibl"], doc["ib_ancho"], doc["ib_velas"] = ib["alto"], ib["bajo"], ib["ancho"], ib["velas"]
         doc["tdh"], doc["tdl"] = comun.rango(rth)
     doc["ib_minutos"] = ib_minutos

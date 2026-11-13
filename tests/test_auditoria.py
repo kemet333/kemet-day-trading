@@ -191,6 +191,17 @@ class Tamano(unittest.TestCase):
             self.assertEqual(comun.estado_globex(comun.parse_ahora(ny))[0], estado, ny)
 
 
+class Velas(unittest.TestCase):
+    def test_una_vela_a_medio_formar_no_cuenta(self):
+        base = comun.ts_de_utc(comun.parse_ahora("2026-11-11 10:30"))
+        ch = {"paso": 300, "velas": [(base + 300 * i, 1, 2, 0, 1, 10) for i in range(4)]}   # 10:30, 10:35, 10:40, 10:45
+        ahora = comun.parse_ahora("2026-11-11 10:56")
+        self.assertEqual(len(comun.velas_cerradas(ch, ahora)), 4)                         # sin ts_mercado: solo el reloj
+        ch["ts_mercado"] = base + 3 * 300 + 120                                           # Yahoo llega hasta las 10:47
+        self.assertEqual([comun.a_ny(comun.utc_de_ts(b[0])).strftime("%H:%M") for b in comun.velas_cerradas(ch, ahora)],
+                         ["10:30", "10:35", "10:40"])                                       # la de 10:45 aún se está formando
+
+
 class Rutas(unittest.TestCase):
     def test_un_config_del_directorio_de_trabajo_no_tapa_el_de_kemet(self):
         d = tempfile.mkdtemp(prefix="kemet-rutas-")

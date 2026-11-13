@@ -393,8 +393,12 @@ def velas(codigo, rango="5d", intervalo="5m", offline=None):
 
 
 def velas_cerradas(ch, ahora_utc):
-    """Solo las velas ya cerradas a esa hora: inicio + paso <= ahora. Yahoo tarda en completar la última; esperar es asunto del que llama."""
+    """Solo las velas ya cerradas a esa hora: inicio + paso <= ahora y, además, <= hasta donde llegan los datos de Yahoo
+    (regularMarketTime). Yahoo va unos minutos tarde y publica la vela en curso con su marca de 5 minutos: sin este tope,
+    una vela a medio formar contaba como cerrada (un disparo falso que después desaparecía)."""
     lim = ts_de_utc(ahora_utc) - ch["paso"]
+    if ch.get("ts_mercado"):
+        lim = min(lim, int(ch["ts_mercado"]) - ch["paso"])
     return [b for b in ch["velas"] if b[0] <= lim]
 
 
@@ -436,7 +440,9 @@ def balance_inicial(codigo, velas_dia, dia, minutos=60):
     if not ib or ib[-1][0] + 300 < fin:   # falta la última vela de la hora
         return None
     hi, lo = rango(ib)
-    return {"alto": hi, "bajo": lo, "ancho": round(hi - lo, 4), "velas": len(ib), "cierra": fin}
+    esperadas = minutos // 5
+    return {"alto": hi, "bajo": lo, "ancho": round(hi - lo, 4), "velas": len(ib), "cierra": fin, "esperadas": esperadas,
+            "completo": len(ib) >= esperadas}
 
 
 def rango_sesion(codigo, velas_dia, dia):

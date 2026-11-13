@@ -51,6 +51,7 @@ IB_MINUTOS = (15, 30, 60)
 IB_FUTURO = 60               # minutos del IB por defecto en un futuro
 IB_ACCION = 15               # y en una acción (la ruptura del rango de apertura de 15 minutos)
 ESPERA_YAHOO = 60            # segundos que una vela cerrada puede tardar en llegar a Yahoo
+RETRASO_MAX_MIN = 20         # minutos de retraso de Yahoo que se esperan antes de dar por perdida una vela
 GRACIA = 2                   # segundos después del cierre de una vela antes de pedirla
 PASO = 300
 SISTEMA = "ruptura-ib"
@@ -248,6 +249,13 @@ def evaluar(codigo, ch, ahora_utc, cfg=None, ib_minutos=None):
 
     ib = comun.balance_inicial(codigo, rth, dia, ib_minutos)
     n_ib = ib_minutos // 5
+    if ib is not None and not ib.get("completo", True):
+        ib = None                                  # con una vela de menos el máximo o el mínimo pueden ser otros: no hay IB
+    if ib is None and ahora_utc >= cierre_ib + dt.timedelta(minutes=RETRASO_MAX_MIN):
+        n = len([b for b in rth if b[0] < ts_de_utc(cierre_ib)])
+        res.update(estado="caducado", motivo="Yahoo solo ha enviado %d de las %d velas del IB (%s a %s NY) y han pasado %d minutos: sin las %d no hay IB ni regla hoy"
+                   % (n, n_ib, hhmm(a_ny(o)), hhmm(a_ny(cierre_ib)), RETRASO_MAX_MIN, n_ib))
+        return res
     if ahora_utc < cierre_ib or ib is None:
         parcial = [b for b in rth if b[0] < ts_de_utc(cierre_ib)]
         prov = None
@@ -303,7 +311,8 @@ def evaluar(codigo, ch, ahora_utc, cfg=None, ib_minutos=None):
                    despues=seguimiento(rth, b[0], lado, stop, objetivo) if riesgo else None)
         return res
     pend = res["retraso"]
-    pendiente_util = pend and pend["pendiente"] and pend["cierra_ts"] <= ts_de_utc(corte)
+    # una vela de antes del corte que Yahoo aún no ha enviado puede disparar: se espera hasta RETRASO_MAX_MIN después del corte
+    pendiente_util = pend and pend["cierra_ts"] <= ts_de_utc(corte) and ahora_utc < corte + dt.timedelta(minutes=RETRASO_MAX_MIN)
     if ahora_utc >= corte and not pendiente_util:
         res.update(estado="caducado", motivo="ninguna vela cerró por encima de %s ni por debajo de %s antes de las %s NY, la última hora para una entrada nueva%s"
                    % (pts(ib["alto"]), pts(ib["bajo"]), hhmm(a_ny(corte)), " (sesión recortada: %s)" % recortado if recortado else ""))
@@ -357,7 +366,7 @@ def describir(res):
     if e == "disparado":
         out.append("DISPARADO %s a las %s NY en %s: %s." % (res["lado"], res["hora"], pts(res["precio"]), res["motivo"]))
         d = res.get("despues")
-        if res.get("minutos_desde", 0) > 5 and d:
+        if res.get("minutos_desde", 0) > 5 and d and d.get("velas"):
             if d["objetivo_tocado"]:
                 que = "un objetivo de 1R (%s) se habría tocado a las %s y el stop no" % (pts(res["objetivo_defecto"]), d["objetivo_tocado"])
             elif d["stop_tocado"]:
@@ -366,9 +375,10 @@ def describir(res):
                 que = "ni el medio del IB (%s) ni 1R (%s) se han tocado" % (pts(res["stop_defecto"]), pts(res["objetivo_defecto"]))
             out.append("Después del disparo (%d velas): máximo %s, mínimo %s, último cierre %s (vela de %s); con el stop y el objetivo por defecto de kemet-salida, %s." % (
                 d["velas"], pts(d["maximo"]), pts(d["minimo"]), pts(d["ultimo"]), d["ultima_vela"], que))
-            out.append("Han pasado %d minutos: una entrada tardía es otra operación, no esta regla." % res["minutos_desde"])
+        if res.get("minutos_desde", 0) > 5:
+            out.append("Han pasado %d minutos desde el cierre de esa vela (Yahoo va con retraso): una entrada tardía es otra operación, no esta regla." % res["minutos_desde"])
         else:
-            out.append("Este es el momento de la entrada, si la tomas. No se ha enviado ninguna orden.")
+            out.append("La regla escrita se acaba de cumplir; es una regla, no una recomendación. No se ha enviado ninguna orden.")
         out.append("Siguiente: stop y objetivo antes de pulsar nada, con kemet-salida (salida.py plan).")
     else:
         out.append("%s  %s." % (ETIQUETA[e], res["motivo"]))
