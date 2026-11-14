@@ -300,21 +300,24 @@ def semaforo(cfg, datos, mercado, forzado=None):
     return base, razones
 
 
-def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3, propia_dia=None, max_mini=None):
+def tamano(mercado, semaforo_, stop, drawdown, diario, max_micro, fallos=3, propia_dia=None, max_mini=None, queda=None):
     """La regla Kemet, la misma de tamano.py: cuarto del drawdown o límite diario (el menor), mitad en ámbar/rojo, entre 3.
-    `propia_dia` es la pérdida del día que fijó el usuario con tamano.py config --perdida-dia (en verde): manda sobre la regla."""
+    `propia_dia` es la pérdida del día que fijó el usuario con tamano.py config --perdida-dia (en verde): manda sobre la regla.
+    `queda` es lo que queda de drawdown (tamano.py cuenta): la pérdida del día nunca pasa de un cuarto (o de todo, si es la tuya)."""
     c = comun.CONTRATOS[mercado]
     cuarto = round(drawdown * 0.25)
     base = min(diario, cuarto) if diario else cuarto
+    if queda is not None:
+        base = min(base, comun.tope_drawdown(queda))
     if propia_dia:
-        base = propia_dia
+        base = propia_dia if queda is None else min(propia_dia, comun.tope_drawdown(queda, usuario=True))
     factor = 1.0 if semaforo_ == "verde" else 0.5
     perdida = round(base * factor, 2) if propia_dia else round(base * factor)
     if comun.sin_micro(mercado):
         max_micro = max_mini
     riesgo = perdida / float(fallos)
     out = {"micro": c["micro"], "perdida_max_dia": perdida, "riesgo_por_operacion": round(riesgo, 2), "cuarto_drawdown": cuarto,
-           "limite_diario_firma": diario, "fallos_y_paras": fallos, "max_micro": max_micro}
+           "limite_diario_firma": diario, "fallos_y_paras": fallos, "max_micro": max_micro, "drawdown_restante": queda}
     if stop:
         por_micro = stop * c["punto_micro"]
         n = int(math.floor(riesgo / por_micro))
@@ -482,8 +485,13 @@ def construir(a):
         propia_dia = None
         if cfg.get("perdida_max_dia_origen") == "usuario" and cfg.get("perdida_max_dia"):
             propia_dia = float(cfg["perdida_max_dia"]) * (2.0 if (cfg.get("semaforo") or "verde") != "verde" else 1.0)
+        queda = None
+        if cfg.get("drawdown") and not a.drawdown:
+            queda, aviso_dd = comun.drawdown_restante(comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False), fecha.isoformat())
+            if aviso_dd:
+                avisos.append(aviso_dd)
         tam = tamano(mercado, sem, a.stop, float(drawdown), float(diario) if diario else None, cfg.get("max_micro"), int(cfg.get("fallos_y_paras") or 3),
-                     propia_dia, cfg.get("max_mini"))
+                     propia_dia, cfg.get("max_mini"), queda)
         if not a.stop:
             aviso_tam = "dime tu stop en puntos (--stop) y te digo cuántos %s caben" % c["micro"]
     elif a.stop:
@@ -611,6 +619,8 @@ def texto(doc, ahora):
             out.append("  %s" % doc["nota_tamano"])
     elif tam:
         detalle = "un cuarto del drawdown = %s" % comun.usd(tam["cuarto_drawdown"])
+        if tam.get("drawdown_restante") is not None:
+            detalle += ", un cuarto de lo que te queda (%s) = %s" % (comun.usd(tam["drawdown_restante"]), comun.usd(comun.tope_drawdown(tam["drawdown_restante"])))
         if tam["limite_diario_firma"]:
             detalle += ", límite diario de la firma %s, manda el menor" % comun.usd(tam["limite_diario_firma"])
         if doc["semaforo"] != "verde":

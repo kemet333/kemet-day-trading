@@ -73,7 +73,7 @@ Python 3.8 or newer. Nothing to pip install. Mac, Linux and Windows.
 | `/kemet-riesgo` | Risk | PASS or BLOCK per order: stop, loss, daily limit, three losses and you stop, data windows, cutoff, market open. |
 | `/kemet-broker` | Broker | Turns the passed order into a plain-words ticket; with your yes, Claude sends it to Alpaca on paper. Futures: by hand on your platform. |
 | `/kemet-alertas` | Alerts | Stop, target, flat-by, your firm's cutoff, opening bell, Globex and NYSE clocks. Each rings once. |
-| `/kemet-diario` | Journal | Reviews your trades CSV: plan compliance before P&L. Three things done right, two that broke the plan, one fix. |
+| `/kemet-diario` | Journal | Reviews your trades CSV (or your platform's trades report): plan compliance before P&L. Three things done right, two that broke the plan, one fix. |
 | `/kemet-resultados` | Earnings | Reads SEC XBRL: quarters, revenue, net income, EPS, margins, when the next report is due. |
 | `/kemet-congreso` | Congress | Congress members' trade disclosures (STOCK Act), the day they post. A hook, not a strategy. |
 | `/kemet-geometria` | Geometry | Which funded account to buy, how much to risk and when to withdraw, from a study of 76 accounts. |
@@ -120,12 +120,14 @@ python3 kemet-maquina/maquina.py run --escribir                        # 10,000 
 python3 kemet-tamano/tamano.py config --firma apex --cuenta eod-pa-150 # -> kemet/config.json (prop-firm account)
 python3 kemet-tamano/tamano.py config --propia --presupuesto 5000 --max-perdida-operacion 50 --max-perdida-dia 150
 python3 kemet-tamano/tamano.py orden --escribir                        # -> kemet/orden.json (bracket)
+python3 kemet-tamano/tamano.py cuenta --queda 1350                     # drawdown you have left today: lowers the size
 python3 kemet-riesgo/riesgo.py check                                   # PASS / BLOCK per order
 python3 kemet-broker/broker.py mostrar                                 # the ticket, READY only with today's PASS
 python3 kemet-broker/broker.py registrar --huella H --id-broker ID --precio P
 python3 kemet-alertas/alertas.py add --desde-plan                      # stop, target, flat-by
 python3 kemet-alertas/alertas.py check                                 # rings what hit, once
 python3 kemet-diario/diario.py revisar operaciones.csv                 # the review
+python3 kemet-diario/diario.py revisar trades.csv --zona America/Chicago   # your platform's trades report, in its time zone
 python3 kemet-resultados/resultados.py AAPL --trimestres 8             # quarters, margins, EPS
 python3 kemet-congreso/congreso.py recientes --dias 45 --miembro pelosi
 ```

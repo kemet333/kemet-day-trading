@@ -43,6 +43,7 @@ toca parar (día agotado o tres operaciones).
 | `kemet/config.json` | los límites de tu cuenta y los tuyos (kemet-tamano `config`, de firma o `--propia`); sin él, valores por defecto y lo dice |
 | `kemet/agenda.json` | los datos del día (kemet-plan `agenda`): ventanas de ±10 minutos, ±20 si `fuerte` |
 | `kemet/estado/dia.json` | lo que has puesto y cerrado hoy; lo escribe `registrar` |
+| `kemet/estado/cuenta.json` | lo que te queda de drawdown (kemet-tamano `cuenta`): si un cuarto es menor, `perdida_max_dia` baja a eso; si cambia, el PASS deja de valer para kemet-broker |
 | `kemet/estado/broker.json` | lo que kemet-broker colocó hoy en papel: cuenta como operación, en el día (su pérdida al stop) y para los duplicados |
 | `kemet/portfolio.json` | (acciones) efectivo y posiciones, de kemet-broker: una venta de lo que tienes es un cierre; sin él, el presupuesto del config |
 | `kemet/precios.json` | (acciones) el último precio de kemet-alertas: con menos de 15 minutos y por encima de la entrada del plan, el riesgo se mide desde él |

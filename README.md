@@ -71,7 +71,7 @@ Hace falta Python 3.8 o más nuevo. Nada que instalar con pip. Funciona en Mac, 
 | `/kemet-tamano` | Tamaño | Tu cuenta (una firma de fondeo o tu propio presupuesto) y cuántos micros o acciones caben con tu stop en tu límite del día. |
 | `/kemet-riesgo` | Riesgo | PASS o BLOCK por orden: stop, pérdida, límite del día, tres fallos y paras, ventanas, hora límite, Globex. |
 | `/kemet-alertas` | Alertas | Stop, objetivo, plano a, la hora límite de tu firma y el reloj de Globex, cada una suena una vez. |
-| `/kemet-diario` | Diario | Revisión del CSV de operaciones: cumplimiento del plan antes que resultado, tres bien, dos mal, una corrección. |
+| `/kemet-diario` | Diario | Revisión del CSV de operaciones (o del informe de operaciones de tu plataforma): cumplimiento del plan antes que resultado, tres bien, dos mal, una corrección. |
 | `/kemet-broker` | Bróker | Convierte la orden con PASS en un ticket en palabras llanas; con tu sí, Claude la manda a Alpaca en papel. Futuros, a mano en tu plataforma. |
 | `/kemet-resultados` | Resultados | Lee los XBRL de la SEC: trimestres, ingresos, beneficio, BPA, márgenes y cuándo toca el próximo informe. |
 | `/kemet-congreso` | Congreso | Las declaraciones de operaciones de los congresistas (STOCK Act), el día que se publican. Un gancho, no una estrategia. |
@@ -140,6 +140,7 @@ python3 kemet-maquina/maquina.py run --escribir                        # 10.000 
 python3 kemet-tamano/tamano.py config --firma apex --cuenta eod-pa-150 # -> kemet/config.json (cuenta de firma)
 python3 kemet-tamano/tamano.py config --propia --presupuesto 5000 --max-perdida-operacion 50 --max-perdida-dia 150
 python3 kemet-tamano/tamano.py calc --stop 18                          # cuántos micros caben
+python3 kemet-tamano/tamano.py cuenta --queda 1350                     # lo que te queda de drawdown hoy: baja el tamaño
 python3 kemet-tamano/tamano.py orden --escribir                        # -> kemet/orden.json
 python3 kemet-riesgo/riesgo.py check                                   # PASS / BLOCK por orden
 python3 kemet-broker/broker.py mostrar                                 # el ticket, LISTO solo con PASS de hoy
@@ -150,6 +151,7 @@ python3 kemet-congreso/congreso.py recientes --dias 45 --miembro pelosi
 python3 kemet-alertas/alertas.py add --desde-plan                      # stop, objetivo, plano a
 python3 kemet-alertas/alertas.py check                                 # suena lo que tocó, una vez
 python3 kemet-diario/diario.py revisar operaciones.csv                 # la revisión
+python3 kemet-diario/diario.py revisar trades.csv --zona America/Chicago   # el informe de operaciones de tu plataforma, en su zona
 ```
 
 ```bash

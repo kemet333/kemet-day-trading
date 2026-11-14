@@ -397,9 +397,10 @@ def ultimo(estado, h, fecha):
     return out
 
 
-def validez_del_pass(riesgo, ahora, simulado_aqui, dia):
+def validez_del_pass(riesgo, ahora, simulado_aqui, dia, cuenta=None):
     """Por qué el último check ya no vale para poner una orden, o None. Un PASS caduca a los PASS_MIN minutos, no vale si se hizo
-    con --ahora (salvo que el ticket también sea una simulación) ni si kemet/estado/dia.json cambió después (otra operación, un resultado)."""
+    con --ahora (salvo que el ticket también sea una simulación) ni si kemet/estado/dia.json (otra operación, un resultado) o
+    kemet/estado/cuenta.json (lo que queda de drawdown) cambiaron después."""
     if not isinstance(riesgo, dict):
         return None
     if riesgo.get("simulado") and not simulado_aqui:
@@ -412,6 +413,8 @@ def validez_del_pass(riesgo, ahora, simulado_aqui, dia):
         return "la comprobación de riesgo es de las %s NY y un PASS vale %d minutos: repite riesgo.py check" % (comun.hhmm(comun.a_ny(cuando)), PASS_MIN)
     if "dia_huella" in riesgo and riesgo.get("dia_huella") != comun.huella_dia(dia):
         return "kemet/estado/dia.json cambió después de la comprobación (otra operación o un resultado): repite riesgo.py check"
+    if "cuenta_huella" in riesgo and riesgo.get("cuenta_huella") != comun.huella_cuenta(cuenta):
+        return "lo que queda de drawdown (kemet/estado/cuenta.json) cambió después de la comprobación: repite riesgo.py check"
     return None
 
 
@@ -590,7 +593,8 @@ def _cargar(a):
     riesgo = comun.leer_json(comun.ruta(RIESGO), obligatorio=False)
     estado = cargar_estado()
     ahora, fecha, hora = _reloj(a, ordenes, cfg)
-    no_vale = validez_del_pass(riesgo, ahora, bool(getattr(a, "ahora", None)), comun.leer_json(comun.ruta(DIA), obligatorio=False))
+    no_vale = validez_del_pass(riesgo, ahora, bool(getattr(a, "ahora", None)), comun.leer_json(comun.ruta(DIA), obligatorio=False),
+                               comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False))
     if no_vale:
         riesgo = dict(riesgo, _no_vale=no_vale)
     return ordenes, cfg, riesgo, estado, ahora, fecha, hora

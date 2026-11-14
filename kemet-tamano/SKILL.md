@@ -9,7 +9,7 @@ description: >-
   acciones de EE. UU. o futuros sin firma: tamaño en acciones enteras con sus topes y una bracket que
   kemet-broker puede enviar en cuenta papel tras el PASS de kemet-riesgo y tu sí. Úsala cuando el usuario diga
   «configura mi cuenta», «cuántos micros caben», «cuántas acciones», «qué tamaño pongo», «tengo una Apex 50K»,
-  «mi stop son 18 puntos», «qué reglas tiene mi firma», o después de que kemet-salida escriba un plan. Va
+  «mi stop son 18 puntos», «me quedan 800 de drawdown», «qué reglas tiene mi firma», o después de que kemet-salida escriba un plan. Va
   antes de kemet-riesgo.
 argument-hint: "[--firma apex --cuenta eod-pa-50 --mercado NQ | --propia --presupuesto 5000 --max-perdida-operacion 50 --max-perdida-dia 150 --mercado TSLA] [--stop 18]"
 ---
@@ -34,6 +34,8 @@ python3 "${CLAUDE_SKILL_DIR}/tamano.py" config --firma apex --cuenta eod-eval-15
 python3 "${CLAUDE_SKILL_DIR}/tamano.py" calc --stop 18                                # micros que caben con kemet/config.json
 python3 "${CLAUDE_SKILL_DIR}/tamano.py" calc --firma apex --cuenta eod-pa-50 --mercado NQ --stop 18
 python3 "${CLAUDE_SKILL_DIR}/tamano.py" calc --drawdown 2000 --diario 1000 --mercado ES --stop 6   # sin firma: tus límites
+python3 "${CLAUDE_SKILL_DIR}/tamano.py" cuenta --queda 1350                         # lo que te queda de drawdown hoy, según tu panel
+python3 "${CLAUDE_SKILL_DIR}/tamano.py" cuenta --saldo 51200 --suelo 49850           # lo mismo con el saldo y el umbral de la firma
 python3 "${CLAUDE_SKILL_DIR}/tamano.py" orden --escribir                              # kemet/plan.json -> kemet/orden.json
 python3 "${CLAUDE_SKILL_DIR}/tamano.py" orden --ahora "2026-11-11 10:45" --json       # fija el reloj (hora de Nueva York)
 ```
@@ -61,9 +63,10 @@ hay un error.
 
 | archivo | qué |
 | --- | --- |
-| `reglas-de-firmas.json` (en esta carpeta) | las 76 cuentas: drawdown y tipo, límite diario, contratos, hora límite, noticias, consistencia, fecha de comprobación |
+| `reglas-de-firmas.json` (en esta carpeta) | las 99 cuentas de Topstep, Tradeify, Alpha Futures, Lucid y Apex: drawdown y tipo, límite diario, contratos, hora límite, noticias, consistencia, fecha de comprobación |
 | `kemet/config.json` | lo escribe `config`; lo leen todas las skills (ejemplos en `config.example.json` y `config.propia.example.json`). `tipo_cuenta` dice si es de firma o propia |
 | `kemet/plan.json` | la operación planificada: lado, entrada, stop, objetivo, fecha, hora de estar plano (kemet-salida); de un futuro o de una acción |
+| `kemet/estado/cuenta.json` | lo que te queda de drawdown hoy (`cuenta`): baja la pérdida del día si un cuarto es menor |
 | `kemet/estado/dia.json` | lo ya arriesgado hoy: riesgo de las abiertas y pérdidas realizadas (kemet-riesgo `registrar`) |
 | `kemet/estado/broker.json` | lo que kemet-broker colocó hoy en papel: cuenta como operación y, si trae su pérdida al stop, en el día |
 | `kemet/portfolio.json` | (acciones) el efectivo y las posiciones que lleva kemet-broker; sin él, el presupuesto del config |
@@ -75,6 +78,13 @@ hay un error.
 - **Pérdida máxima del día**: la menor entre el límite diario de la firma (si lo tiene) y un cuarto del
   drawdown. En ámbar o rojo, la mitad. Con `--perdida-dia` la fijas tú, nunca por encima del límite diario
   de la firma (si lo supera, rechaza); el config guarda de dónde sale (`perdida_max_dia_origen`).
+- **Lo que queda de drawdown**: el drawdown de la cuenta es el del primer día. Si has perdido, o el trailing
+  ha subido, te queda menos: apúntalo antes de la primera operación con `tamano.py cuenta --queda 1350` (o
+  `--saldo 51200 --suelo 49850`, lo que dice tu panel) y la pérdida del día nunca pasa de un cuarto de lo que
+  queda (de todo lo que queda si la fijaste tú con `--perdida-dia`). Solo baja el tamaño, nunca lo sube. Lo
+  usan `calc`, `orden`, kemet-plan y kemet-riesgo; un apunte de otro día se sigue usando con un aviso, y
+  con 0 o menos la cuenta está en su límite y hoy no se opera. `tamano.py cuenta` lo enseña y `--borrar` lo
+  olvida.
 - **Riesgo por operación**: la pérdida máxima del día entre tres. Tres fallos y paras.
 - **Contratos**: el menor de tres límites, en micros enteros: riesgo por operación entre (riesgo en puntos
   por valor del punto del micro), el tope de micros de la cuenta, y lo que queda del día (pérdida máxima

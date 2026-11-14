@@ -11,7 +11,7 @@ description: >-
   trader. Úsala cuando el usuario diga «revísame el diario», «cómo me ha ido», «qué estoy haciendo mal», «aquí
   están mis operaciones», «analiza mi semana», o al cerrar una sesión. Va después de operar; la corrección
   alimenta el plan de mañana (kemet-plan).
-argument-hint: "revisar operaciones.csv [--desde AAAA-MM-DD] [--hasta AAAA-MM-DD] [--stop-habitual PTS]"
+argument-hint: "revisar operaciones.csv [--zona America/Chicago] [--desde AAAA-MM-DD] [--hasta AAAA-MM-DD] [--stop-habitual PTS]"
 ---
 
 # kemet-diario
@@ -47,10 +47,15 @@ Código de salida: 0 si no hay rupturas del plan medibles, 1 si las hay, 2 si ha
 `fecha,hora,simbolo,lado,contratos,entrada,salida,stop,pnl,nota`. Se aceptan los nombres en inglés
 (`date, time, symbol, side, qty, entry, exit, stop, pnl, note`) y variantes habituales; el separador puede
 ser `;` y los decimales con coma (`28.429,75`). La hora es la de Nueva York; si la columna se llama
-`hora_madrid` se convierte con la fecha de cada fila. El símbolo puede ser el micro, el mini o el contrato
-con vencimiento (MNQ, NQ, MNQZ6), o el ticker de una acción de EE. UU. (TSLA, AAPL): entonces `contratos`
+`hora_madrid` se convierte con la fecha de cada fila; `--zona America/Chicago` (o `Europe/Madrid`, `UTC`)
+convierte las de otra zona, y una hora con desfase (`2026-11-09T10:00:13-05:00`) se convierte sola. La fecha
+y la hora pueden ir en la misma columna (`Entry time` con `11/9/2026 9:00:13 AM`). Las operaciones de futuros
+cuentan en su sesión de CME: lo que entra después de las 18:00 NY es del día siguiente, también para
+`--desde`, `--hasta` y el día de la semana. El símbolo puede ser el micro, el mini o el contrato
+con vencimiento (MNQ, NQ, MNQZ6, MNQ 12-26), o el ticker de una acción de EE. UU. (TSLA, AAPL): entonces `contratos`
 (o una columna `acciones`) es la cantidad en acciones, los precios van en dólares por acción y el punto vale
-1 $, sin micros. El lado: largo/corto, long/short, buy/sell. Si falta `pnl` se calcula con entrada, salida,
+1 $, sin micros. El lado: largo/corto, long/short, buy/sell (en `Market pos.`, o en `Type` si solo dice
+Long/Short). Si falta `pnl` se calcula con entrada, salida,
 lado, cantidad y el valor del punto. Si falta `stop` la operación cuenta como sin stop; `--stop-habitual` le
 supone un riesgo solo para las métricas en R. Con una cuenta propia (`tamano.py config --propia`) el riesgo
 por operación es el del config y no hay hora límite de firma (sale «no medible»).
@@ -78,10 +83,12 @@ por operación es el del config y no hay hora límite de firma (sale «no medibl
 
 ## Pasos
 
-1. Pide el CSV o ayúdale a hacerlo con `plantilla`. Una exportación de su plataforma no entra tal cual: cada
-   una tiene sus columnas (Tradovate no trae el lado, NinjaTrader usa «Market pos.», Alpaca exporta fills sin
-   emparejar). Ayúdale a convertirla a una fila por operación con las columnas de `plantilla` (lee el archivo,
-   empareja entradas y salidas, escribe el CSV nuevo y enséñale las primeras filas antes de revisar). Las cifras
+1. Pide el CSV o ayúdale a hacerlo con `plantilla`. Un informe de operaciones cerradas de su plataforma (una
+   fila por operación con precio de entrada y de salida, como el de Trades de NinjaTrader) suele entrar tal
+   cual: pregúntale en qué zona horaria exporta su plataforma y pásala con `--zona`. Una exportación de
+   ejecuciones (cada compra y cada venta en su línea, con un solo precio: fills de Tradovate o Alpaca) se
+   rechaza con su motivo: ayúdale a convertirla a una fila por operación con las columnas de `plantilla` (lee
+   el archivo, empareja entradas y salidas, escribe el CSV nuevo y enséñale las primeras filas antes de revisar). Las cifras
    con formato de EE. UU. (1,234.50) y las fechas mes/día se detectan solas; si el archivo no lo deja claro, el
    aviso lo dice y `--decimal punto` o `--fechas mdy` lo fijan.
 2. Si hay `kemet/config.json`, la revisión mide el tamaño y la pérdida máxima del día con sus reglas; si no,

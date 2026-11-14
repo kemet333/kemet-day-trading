@@ -110,11 +110,13 @@ def restar_min(t, minutos):
 
 # ---------------------------------------------------------------- la regla Kemet
 
-def perdida_maxima_dia(drawdown, limite_diario, semaforo="verde"):
-    """La menor entre el límite diario de la firma (si lo hay) y un cuarto del drawdown; en ámbar o rojo, la mitad.
-    Devuelve (perdida_max_dia, cuarto)."""
+def perdida_maxima_dia(drawdown, limite_diario, semaforo="verde", queda=None):
+    """La menor entre el límite diario de la firma (si lo hay), un cuarto del drawdown y, si se sabe, un cuarto de lo que queda
+    de drawdown (kemet/estado/cuenta.json); en ámbar o rojo, la mitad. Devuelve (perdida_max_dia, cuarto)."""
     cuarto = round(drawdown * 0.25)
     base = min(limite_diario, cuarto) if limite_diario else cuarto
+    if queda is not None:
+        base = min(base, comun.tope_drawdown(queda))
     factor = 1.0 if semaforo == "verde" else 0.5
     return round(base * factor), cuarto
 
@@ -190,7 +192,7 @@ def construir_config(f, a, mercado, semaforo="verde", zona="Europe/Madrid", plan
         "noticias": a.get("news"), "consistencia": a.get("consistency"),
         "perdida_max_dia": pmd, "perdida_max_dia_origen": origen, "fallos_y_paras": FALLOS_Y_PARAS, "semaforo": semaforo,
         "sin_entradas_antes": SIN_ENTRADAS_ANTES, "sin_entradas_despues": SIN_ENTRADAS_DESPUES, "plano_a": comun.hhmm(plano),
-        "zona_usuario": zona, "papel": True, "comprobado": f.get("checked"), "fuente": f.get("source"),
+        "zona_usuario": zona, "papel": True, "comprobado": f.get("checked"), "fuente": a.get("source") or f.get("source"),
     }
     if a.get("note"):
         notas.append("nota de la firma: %s" % a["note"])
@@ -397,9 +399,12 @@ def precio_fresco(doc, simbolo, ahora_utc, minutos=PRECIO_FRESCO_MIN):
 
 # ---------------------------------------------------------------- calc (lo que hacía el tamano.py anterior)
 
-def calcular(drawdown, diario, cap, mercado, stop, semaforo="verde", perdida_max_dia=None, cap_mini=None):
+def calcular(drawdown, diario, cap, mercado, stop, semaforo="verde", perdida_max_dia=None, cap_mini=None, queda=None):
     """Pura: cuántos micros caben. Devuelve un dict con todas las cifras. `perdida_max_dia` es la que fijó el usuario: manda
-    sobre la regla Kemet y también baja a la mitad en ámbar o rojo. ZN y ZB no tienen micro: cuentan con el tope de minis."""
+    sobre la regla Kemet y también baja a la mitad en ámbar o rojo. ZN y ZB no tienen micro: cuentan con el tope de minis.
+    `queda` es lo que queda de drawdown: la pérdida del día nunca pasa de un cuarto (o de todo, si la fijó el usuario)."""
+    if queda is not None and (not queda == queda or queda in (float("inf"), float("-inf"))):
+        raise KemetError("lo que queda de drawdown tiene que ser un número")
     mercado = mercado.upper()
     if mercado not in comun.CONTRATOS:
         raise KemetError("mercado %s no soportado: %s" % (mercado, ", ".join(comun.CONTRATOS)))
@@ -408,9 +413,10 @@ def calcular(drawdown, diario, cap, mercado, stop, semaforo="verde", perdida_max
         raise KemetError("hace falta --stop en puntos (mayor que 0)")
     if stop < comun.tick_de(mercado) - 1e-12:
         raise KemetError("un stop de %s puntos es menos de un tick de %s (%s): no existe en la plataforma" % (pts(stop), c["micro"], pts(comun.tick_de(mercado))))
-    hoy, cuarto = perdida_maxima_dia(drawdown, diario, semaforo)
+    hoy, cuarto = perdida_maxima_dia(drawdown, diario, semaforo, queda)
     if perdida_max_dia is not None:
-        hoy = round(perdida_max_dia * (1.0 if semaforo == "verde" else 0.5), 2)
+        base = perdida_max_dia if queda is None else min(perdida_max_dia, comun.tope_drawdown(queda, usuario=True))
+        hoy = round(base * (1.0 if semaforo == "verde" else 0.5), 2)
     por_op = hoy / float(FALLOS_Y_PARAS)
     crudo = micros_que_caben(por_op, stop, c["punto_micro"])
     if comun.sin_micro(mercado):
@@ -419,19 +425,22 @@ def calcular(drawdown, diario, cap, mercado, stop, semaforo="verde", perdida_max
     return {"mercado": mercado, "micro": c["micro"], "punto_micro": c["punto_micro"], "drawdown": drawdown,
             "limite_diario_firma": diario, "cuarto": cuarto, "semaforo": semaforo, "perdida_max_dia": hoy,
             "riesgo_por_operacion": round(por_op, 2), "stop_pts": stop, "riesgo_usd_micro": round(stop * c["punto_micro"], 2),
-            "sin_tope": crudo, "tope_cuenta": cap, "contratos": n}
+            "sin_tope": crudo, "tope_cuenta": cap, "contratos": n, "drawdown_restante": queda}
 
 
 def informe_calc(r, cuenta_nombre, extra=None):
     lineas = ["Cuenta: %s" % cuenta_nombre,
               "Drawdown %s $ · límite diario de la firma %s · regla Kemet: 25%% del drawdown = %s $"
               % (num(r["drawdown"], 0), (num(r["limite_diario_firma"], 0) + " $") if r["limite_diario_firma"] else "ninguno", num(r["cuarto"], 0)),
+              ] + (["Te quedan %s $ de drawdown: un cuarto son %s $" % (num(r["drawdown_restante"], 0), num(comun.tope_drawdown(r["drawdown_restante"]), 0))]
+                   if r.get("drawdown_restante") is not None else []) + [
               "Pérdida máxima de hoy (%s): %s $ · riesgo por operación: %s $ (tres fallos y paras)"
               % (r["semaforo"], num(r["perdida_max_dia"], 0), num(r["riesgo_por_operacion"], 0)),
               "Stop %g pts × %g $/pt del %s = %s $ por micro" % (r["stop_pts"], r["punto_micro"], r["micro"], num(r["riesgo_usd_micro"], 2)),
               "Contratos: %d %s" % (r["contratos"], r["micro"])
               + (" (tope de la cuenta: %d)" % r["tope_cuenta"] if r["tope_cuenta"] and r["sin_tope"] > r["tope_cuenta"] else "")
-              + (" · no cabe ninguno: reduce el stop o espera un día verde" if r["contratos"] == 0 else "")]
+              + ((" · la cuenta está en su límite de pérdida: hoy no se opera" if r.get("drawdown_restante") is not None and r["drawdown_restante"] <= 0
+                  else " · no cabe ninguno: reduce el stop o espera un día verde") if r["contratos"] == 0 else "")]
     if not r["tope_cuenta"]:
         lineas.append("AVISO: esta cuenta no publica tope de contratos en el archivo de reglas: mira el de tu panel y pásalo con --max-micro")
     if extra:
@@ -587,6 +596,9 @@ def dimensionar(plan, cfg, hoy, dia_doc=None, tipo="stop", limite=None, precios=
     if _f(plan.get("riesgo_pts")) and abs(_f(plan["riesgo_pts"]) - riesgo_pts) > c["tick"]:
         raise KemetError("el plan dice riesgo_pts %s pero entrada menos stop son %s puntos" % (pts(_f(plan["riesgo_pts"])), pts(riesgo_pts)))
     por_micro = round(riesgo_pts * c["punto_micro"], 2)
+    if cfg.get("drawdown_restante") is not None and not cfg.get("perdida_max_dia"):
+        return {"rechazo": "te quedan %s de drawdown: la cuenta está en su límite de pérdida, hoy no se opera" % usd(cfg["drawdown_restante"]),
+                "contratos": 0, "limites": []}
     por_op = riesgo_por_operacion_de(cfg)
     pmd = cfg.get("perdida_max_dia")
     abierto, realizada, n_ops = hoy_en_dia(dia_doc, hoy, broker_doc)
@@ -891,14 +903,15 @@ def cmd_calc(a):
                 raise KemetError("firma o cuenta no encontrada; usa tamano.py listar")
             nombre = "%s · %s" % (f["name"], acc["label"])
             tope = min([x for x in (acc.get("max_micro"), a.max_micro) if x] or [None]) if (acc.get("max_micro") or a.max_micro) else None
-            r = calcular(acc["max_loss"], acc.get("daily_loss_limit"), tope, a.mercado or "NQ", a.stop, a.semaforo or "verde", cap_mini=acc.get("max_mini"))
+            r = calcular(acc["max_loss"], acc.get("daily_loss_limit"), tope, a.mercado or "NQ", a.stop, a.semaforo or "verde", cap_mini=acc.get("max_mini"),
+                         queda=a.queda)
             fb = acc.get("flat_by") or {}
             extra.append("Hora límite: %s %s · noticias: %s" % (fb.get("time", "?"), fb.get("tz", ""), acc.get("news", "?"))
                          + (" · consistencia: %s" % acc["consistency"] if acc.get("consistency") else ""))
             extra.append("Reglas comprobadas el %s: confírmalas en tu panel, las firmas las cambian." % f.get("checked", "?"))
         else:
             nombre = "propia"
-            r = calcular(a.drawdown, a.diario, a.max_micro, a.mercado or "NQ", a.stop, a.semaforo or "verde", cap_mini=a.max_micro)
+            r = calcular(a.drawdown, a.diario, a.max_micro, a.mercado or "NQ", a.stop, a.semaforo or "verde", cap_mini=a.max_micro, queda=a.queda)
     else:
         cfg, existe = cargar_config()
         if not existe:
@@ -909,8 +922,16 @@ def cmd_calc(a):
         if cfg.get("perdida_max_dia_origen") == "usuario":
             # la tuya manda siempre; la de la config ya lleva su semáforo, así que se vuelve a la de verde antes de aplicar el de hoy
             pmd = cfg["perdida_max_dia"] * (2.0 if (cfg.get("semaforo") or "verde") != "verde" else 1.0)
+        queda = a.queda
+        if queda is None:
+            ny = comun.a_ny(comun.utc_ahora())
+            queda, aviso = comun.drawdown_restante(comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False), comun.dia_negociacion(ny).isoformat())
+            if aviso:
+                extra.append("AVISO: " + aviso)
         r = calcular(cfg["drawdown"], cfg.get("limite_diario_firma"), cfg.get("max_micro"), a.mercado or cfg["mercado"], a.stop, semaforo, pmd,
-                     cap_mini=cfg.get("max_mini"))
+                     cap_mini=cfg.get("max_mini"), queda=queda)
+        if queda is None and cfg.get("drawdown_tipo") and "trail" in str(cfg["drawdown_tipo"]).lower():
+            extra.append("Drawdown que se mueve (%s): si ya no te queda entero, apunta lo que dice tu panel con tamano.py cuenta --queda …" % cfg["drawdown_tipo"])
         extra.append("Hora límite: %s %s · plano a las %s NY · noticias: %s" % (cfg.get("hora_limite"), cfg.get("hora_limite_tz"), cfg.get("plano_a"), cfg.get("noticias") or "?")
                      + (" · consistencia: %s" % cfg["consistencia"] if cfg.get("consistencia") else ""))
         extra.append("Reglas comprobadas el %s: confírmalas en tu panel, las firmas las cambian." % cfg.get("comprobado", "?"))
@@ -953,9 +974,12 @@ def cmd_orden(a):
         limite = True if a.limite == "plan" else _f(a.limite)
         if limite is None or (limite is not True and limite <= 0):
             raise KemetError("--limite va solo (el precio de entrada del plan) o con un precio mayor que 0, no %r" % a.limite)
+    cfg, avisos_dd = comun.con_drawdown_restante(cfg, comun.leer_json(comun.ruta(comun.CUENTA), obligatorio=False),
+                                                 comun.dia_negociacion(comun.a_ny(ahora)).isoformat())
     cfg, aviso_sem = con_semaforo_de_hoy(cfg, comun.leer_json("plan-sesion.json", obligatorio=False), comun.a_ny(ahora))
-    if aviso_sem and not a.json:
-        print("AVISO: " + aviso_sem)
+    if not a.json:
+        for x in avisos_dd + ([aviso_sem] if aviso_sem else []):
+            print("AVISO: " + x)
     s = dimensionar(plan, cfg, hoy, dia, a.tipo, limite, precios, cartera, broker, ahora)
     orden = orden_bracket(s) if s.get("limites") else None
     doc = None
@@ -972,6 +996,64 @@ def cmd_orden(a):
         elif orden:
             print("No escrita: repite con --escribir para guardarla en kemet/orden.json")
     return 0 if orden else 1
+
+
+def cmd_cuenta(a):
+    """Apunta (o enseña, o borra) lo que te queda de drawdown hoy: kemet/estado/cuenta.json."""
+    ahora = comun.parse_ahora(a.ahora)
+    fecha = comun.dia_negociacion(comun.a_ny(ahora)).isoformat()
+    p = comun.ruta(comun.CUENTA)
+    if a.borrar:
+        if os.path.exists(p):
+            os.remove(p)
+        print("Borrado %s: el tamaño vuelve a contar con el drawdown entero de la cuenta" % p)
+        return 0
+    if a.queda is None and a.saldo is None and a.suelo is None:
+        doc = comun.leer_json(p, obligatorio=False)
+        queda, aviso = comun.drawdown_restante(doc, fecha)
+        if queda is None:
+            print("Sin apuntar: el tamaño cuenta con el drawdown entero. Apúntalo con tamano.py cuenta --queda 1350 (o --saldo y --suelo)")
+            return 0
+        print(json.dumps(doc, ensure_ascii=False, indent=1) if a.json else "Te quedan %s de drawdown (apuntado el %s) · un cuarto son %s"
+              % (usd(queda), doc.get("fecha"), usd(comun.tope_drawdown(queda))))
+        if aviso and not a.json:
+            print("AVISO: " + aviso)
+        return 0
+    if a.queda is not None and (a.saldo is not None or a.suelo is not None):
+        raise KemetError("di --queda, o --saldo y --suelo, no las dos cosas")
+    if a.queda is None:
+        if a.saldo is None or a.suelo is None:
+            raise KemetError("con --saldo hace falta --suelo (el saldo en el que la firma cierra la cuenta), y al revés")
+        queda = round(a.saldo - a.suelo, 2)
+    else:
+        queda = a.queda
+    if not queda == queda or queda in (float("inf"), float("-inf")):
+        raise KemetError("lo que queda de drawdown tiene que ser un número")
+    cfg, existe = cargar_config()
+    notas = []
+    if existe and es_propia(cfg):
+        raise KemetError("tu config es de una cuenta propia: no tiene drawdown de firma")
+    if existe and cfg.get("drawdown") and queda > float(cfg["drawdown"]) + 0.005:
+        notas.append("te quedan %s, más que el drawdown de la cuenta (%s): el tamaño sigue contando con el de la cuenta" % (usd(queda), usd(cfg["drawdown"])))
+    doc = {"fecha": fecha, "drawdown_restante": queda, "apuntado": comun.iso(ahora)}
+    if a.saldo is not None:
+        doc.update({"saldo": a.saldo, "suelo": a.suelo})
+    comun.escribir_json(p, doc)
+    if a.json:
+        print(json.dumps(doc, ensure_ascii=False, indent=1))
+        return 0
+    print("Apuntado en %s: te quedan %s de drawdown hoy (%s)" % (p, usd(queda), fecha))
+    if queda <= 0:
+        print("La cuenta está en su límite de pérdida: hoy no se opera.")
+    elif existe and cfg.get("perdida_max_dia"):
+        nuevo, avisos = comun.con_drawdown_restante(cfg, doc, fecha)
+        if nuevo["perdida_max_dia"] < float(cfg["perdida_max_dia"]) - 0.005:
+            print("Pérdida máxima del día: %s (antes %s)" % (usd(nuevo["perdida_max_dia"]), usd(cfg["perdida_max_dia"])))
+        else:
+            print("Pérdida máxima del día: %s, sin cambios (un cuarto de lo que queda, %s, no es menor)" % (usd(cfg["perdida_max_dia"]), usd(comun.tope_drawdown(queda))))
+    for n in notas:
+        print("Nota: " + n)
+    return 0
 
 
 def main(argv=None):
@@ -1012,6 +1094,14 @@ def main(argv=None):
     p.add_argument("--presupuesto", type=float, help="(cuenta propia sin config) dinero de la cuenta")
     p.add_argument("--max-perdida-operacion", dest="max_perdida_operacion", type=float, help="(cuenta propia sin config) pérdida máxima por operación")
     p.add_argument("--max-perdida-dia", dest="max_perdida_dia", type=float, help="(cuenta propia sin config) pérdida máxima del día (por defecto el triple)")
+    p.add_argument("--queda", type=float, help="lo que te queda de drawdown según tu panel, en dólares (si no, el de tamano.py cuenta)")
+    p.add_argument("--json", action="store_true")
+    p = sub.add_parser("cuenta", help="apunta lo que te queda de drawdown hoy, según tu panel (kemet/estado/cuenta.json)")
+    p.add_argument("--queda", type=float, help="dólares que te quedan hasta el límite de pérdida de la firma")
+    p.add_argument("--saldo", type=float, help="saldo de la cuenta ahora (con --suelo)")
+    p.add_argument("--suelo", type=float, help="saldo en el que la firma cierra la cuenta (trailing threshold, liquidation)")
+    p.add_argument("--borrar", action="store_true", help="olvida lo apuntado: vuelve al drawdown entero")
+    p.add_argument("--ahora", help="hora de Nueva York, AAAA-MM-DD HH:MM")
     p.add_argument("--json", action="store_true")
     p = sub.add_parser("orden", help="una orden bracket en micros (o en acciones, con una cuenta propia) desde kemet/plan.json")
     p.add_argument("--plan", help="otro plan.json (por defecto kemet/plan.json)")
@@ -1025,7 +1115,7 @@ def main(argv=None):
         ap.print_help()
         return 2
     try:
-        return {"listar": cmd_listar, "config": cmd_config, "calc": cmd_calc, "orden": cmd_orden}[a.cmd](a)
+        return {"listar": cmd_listar, "config": cmd_config, "calc": cmd_calc, "cuenta": cmd_cuenta, "orden": cmd_orden}[a.cmd](a)
     except KemetError as e:
         print("tamano.py: %s" % e, file=sys.stderr)
         return 2
