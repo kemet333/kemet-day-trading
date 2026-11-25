@@ -597,7 +597,7 @@ def texto(doc, ahora):
         if accion:
             out.append("  Sin sesión nocturna: una acción abre a las 09:30 y los primeros 15 minutos son su balance inicial.")
         if doc["mercado"] in ("ES", "NQ"):
-            out.append("  Gamma: el pivote y los muros de calls y puts los marcas tú desde tu fuente de opciones; este pack no los tiene.")
+            out.append("  Gamma: el muro de calls, el muro de puts y la gamma 0 salen de kemet-niveles (gamma.py).")
     else:
         out.append("Niveles que marco: %s. Ejecuta niveles.py (kemet-niveles) y márcalos a mano." % (doc["nota_niveles"] or "no calculados"))
     tam = doc["tamano"]

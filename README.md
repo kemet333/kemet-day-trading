@@ -63,7 +63,7 @@ Hace falta Python 3.8 o más nuevo. Nada que instalar con pip. Funciona en Mac, 
 | `/kemet-desk` | El desk | Te sitúa (mercado, cuenta, stop, horario), elige la pieza y las encadena en orden. |
 | `/kemet-scanner` | Scanner | Barre miles de acciones (universo de Nasdaq Trader) antes de abrir y a las 10:15, con cierres diarios y el rango de apertura, y los doce futuros con su balance inicial y el máximo y mínimo de ayer. |
 | `/kemet-noticias` | Noticias | Titulares y filings 8-K por ticker con hora y etiqueta, y la agenda macro del día, en un solo sitio. |
-| `/kemet-niveles` | Niveles | Máximo, mínimo y cierre de ayer, rango nocturno, apertura y balance inicial, y dónde está el precio. |
+| `/kemet-niveles` | Niveles | Máximo, mínimo y cierre de ayer, rango nocturno, apertura y balance inicial; perfil de volumen de Asia, Londres y Nueva York; muros de gamma de las opciones. |
 | `/kemet-plan` | Plan de sesión | El plan escrito: franjas, ventanas de datos en las que no se opera, semáforo, niveles, tamaño, hora límite de tu firma. |
 | `/kemet-entrada` | Entrada | La ruptura del balance inicial vela a vela: formando, esperando, disparado o caducado. |
 | `/kemet-salida` | Salida | Stop y objetivo antes de entrar, al tick, en puntos y en dólares por micro. |
@@ -205,7 +205,7 @@ ver en la máquina del tiempo lo que habría hecho en las sesiones anteriores. N
 kemet-desk/        SKILL.md, references/ (plan de sesión, revisión)
 kemet-scanner/     SKILL.md, scanner.py
 kemet-noticias/    SKILL.md, noticias.py
-kemet-niveles/     SKILL.md, niveles.py
+kemet-niveles/     SKILL.md, niveles.py, perfil.py, gamma.py
 kemet-plan/        SKILL.md, plan.py, agenda.example.json
 kemet-entrada/     SKILL.md, entrada.py
 kemet-salida/      SKILL.md, salida.py

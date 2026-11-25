@@ -147,7 +147,7 @@ Entradas nuevas solo entre 09:45 NY (15:45 Madrid) y 14:00 NY (20:00 Madrid).
 Niveles que marco (sesión anterior 2026-11-10, velas de 5 min de Yahoo):
   Ayer       máximo 28.090   mínimo 27.516   cierre 27.835,25
   Noche      máximo 28.397,50   mínimo 27.847,75
-  Gamma: el pivote y los muros de calls y puts los marcas tú desde tu fuente de opciones; este pack no los tiene.
+  Gamma: el muro de calls, el muro de puts y la gamma 0 salen de kemet-niveles (`gamma.py`).
 Mi tamaño: 1 MNQ por operación con stop de 40 pts
   pérdida máxima del día 312 $ (un cuarto del drawdown = 625 $, la mitad por ámbar)
   riesgo por operación 104 $ (entre 3 fallos y paras) · al stop pierdes 80,00 $ por MNQ
