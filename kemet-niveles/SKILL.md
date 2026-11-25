@@ -1,15 +1,14 @@
 ---
 name: kemet-niveles
 description: >-
-  Niveles de sesión de futuros (ES, NQ, CL, GC) y de acciones de EE. UU. (TSLA, cualquier ticker) con velas de
-  5 minutos gratis de Yahoo, sin clave. Calcula lo que un trader intradía marca antes de abrir: máximo, mínimo
-  y cierre de la sesión regular anterior (PDH, PDL, PDC), rango nocturno desde las 18:00 de Nueva York (ONH,
-  ONL), apertura de 15 minutos (ORH, ORL), balance inicial de la primera hora (IBH, IBL, solo cuando ya
-  cerró), máximo y mínimo de hoy, el rango medio de las últimas 20 sesiones y dónde está el último precio
-  respecto a cada nivel. En una acción no hay noche y el balance inicial es de 15 minutos, al céntimo.
-  Niveles, no señales: sin dirección ni objetivos. Úsala cuando el usuario diga «qué niveles marco», «dame el
-  máximo y el mínimo de ayer», «dónde cerró el NQ», «rango nocturno», «cuál es el balance inicial», «dónde
-  está el precio respecto a ayer», «niveles de TSLA», o al empezar el día antes de kemet-plan.
+  Niveles de sesión de futuros (ES, NQ, CL, GC) y acciones de EE. UU. con datos gratis de Yahoo, sin clave:
+  máximo, mínimo y cierre de ayer (PDH, PDL, PDC), rango nocturno (ONH, ONL), apertura de 15 minutos, balance
+  inicial de la primera hora (IBH, IBL), máximo y mínimo de hoy y el rango medio de 20 sesiones. Con perfil.py,
+  el perfil de volumen de Asia, Londres y Nueva York (POC, VAH, VAL); con gamma.py, el muro de calls, el muro
+  de puts, la gamma 0 y el movimiento esperado de las opciones (QQQ y NDX para el NQ, SPY y SPX para el ES).
+  Niveles, no señales. Úsala cuando el usuario diga «qué niveles marco», «máximo y mínimo de ayer», «rango
+  nocturno», «balance inicial», «niveles de TSLA», «perfil de volumen», «POC de Asia», «dónde está el muro de
+  calls», «gamma flip», «niveles gamma», o al empezar el día antes de kemet-plan.
 argument-hint: "[--mercado ES|NQ|CL|GC|TSLA] [--ib-minutos 60|15] [--todos] [--escribir] [--ahora \"AAAA-MM-DD HH:MM\"]"
 ---
 
@@ -38,6 +37,31 @@ Nueva York para fijar el reloj, `--offline RUTA` para leer un JSON de Yahoo guar
 carpeta `tests/fixtures/yahoo`). `KEMET_DIR` cambia la carpeta `kemet/`. Código de salida 0 si hay niveles, 1 si no
 hay sesión anterior en los datos, 2 si hay un error (una línea, sin traza).
 
+## Perfiles por sesión y gamma
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/perfil.py" --mercado NQ                  # Asia, Londres y Nueva York de hoy, y Nueva York de ayer
+python3 "${CLAUDE_SKILL_DIR}/perfil.py" --mercado ES --fila 2 --escribir   # filas de 2 puntos; guarda kemet/perfil.json
+python3 "${CLAUDE_SKILL_DIR}/gamma.py" --mercado NQ                   # muros, gamma 0 y movimiento esperado en precio del NQ
+python3 "${CLAUDE_SKILL_DIR}/gamma.py" --mercado ES --dias 14 --escribir   # vencimientos de 14 días; guarda kemet/gamma.json
+python3 "${CLAUDE_SKILL_DIR}/gamma.py" --mercado TSLA                 # una acción, con sus propias opciones
+```
+
+- **Perfil de volumen** (`perfil.py`, solo futuros): sesiones del día de CME en hora de Nueva York: Asia de 18:00 a
+  03:00 (naranja), Londres de 03:00 a la apertura regular (azul) y Nueva York en la sesión regular (rojo), más la de
+  Nueva York de ayer. El volumen de cada vela de 5 min se reparte por igual entre las filas que toca: es una
+  aproximación, no el perfil de cada operación. POC: la fila con más volumen. Zona de valor (VAH, VAL): desde el POC,
+  la fila vecina con más volumen hasta el 70 %. Filas redondas (1, 2, 5, 10, 25… ticks; unas 60 por sesión) o `--fila`.
+- **Gamma** (`gamma.py`): de las cadenas de opciones de Yahoo (gratis, con retraso; interés abierto del cierre
+  anterior). Gamma de Black-Scholes × interés abierto × 100 × precio² × 1 %, calls en positivo y puts en negativo
+  (el supuesto habitual: dealers largos de calls y cortos de puts; nadie publica sus posiciones). Cada strike se lleva al
+  futuro con la relación futuro / subyacente de ahora y se suma en filas (NQ 25 puntos, ES 5). **Muro de calls**: la
+  fila con más gamma de calls por encima del precio; **muro de puts**: la de más gamma de puts por debajo; **gamma 0**:
+  donde la gamma total cambia de signo (rejilla de ±12 %); **movimiento esperado**: volatilidad implícita en el dinero
+  del vencimiento más cercano, hasta ese vencimiento. Sin lo que vence hoy, que tapa todo lo demás (`--con-0dte` lo
+  mete). No incluye las opciones sobre futuros de la CME (son de pago); CL y GC no tienen gamma aquí.
+- Las dos son contexto para marcar a mano en tu plataforma, como los demás niveles: no dicen hacia dónde va el precio.
+
 ## Qué lee y escribe
 
 | archivo | qué |
@@ -45,6 +69,9 @@ hay sesión anterior en los datos, 2 si hay un error (una línea, sin traza).
 | `kemet/config.json` | opcional: `mercado` por defecto. Sin él, NQ |
 | Yahoo, gráfico v8 | `range=60d&interval=5m` del contrato continuo (`NQ=F`), una petición por contrato: gratis, sin clave, unos 10 minutos de retraso; 60 días porque el rango medio usa 20 sesiones |
 | `kemet/niveles.json` | con `--escribir`: `generado`, `mercado`, `instrumento` (futuro o accion), `fecha`, `sesion` (rth, nocturna, cerrado), `ultimo`, `pdh`, `pdl`, `pdc`, `onh`, `onl`, `orh`, `orl`, `ibh`, `ibl`, `ib_minutos`, `tdh`, `tdl`, `rango_medio_20`, `posicion`. Las claves que aún no existen no aparecen; en una acción `onh` y `onl` no existen nunca |
+| `kemet/perfil.json` | con `perfil.py --escribir`: `mercado`, `fecha`, `sesiones` (cada una con `nombre`, `color`, `poc`, `vah`, `val`, `alto`, `bajo`, `volumen`, `fila`, `filas`) |
+| `kemet/gamma.json` | con `gamma.py --escribir`: `muro_calls`, `muro_puts`, `gamma_0`, `regimen`, `movimiento_esperado`, `rango_esperado`, `calls_arriba`, `puts_abajo`, `subyacentes`, `supuesto` |
+| Yahoo, opciones v7 | `gamma.py`: una petición por vencimiento (hasta 15 por subyacente), con la cookie y el «crumb» que pide Yahoo; unos 30 a 70 segundos |
 | `kemet/niveles-ES.json` (y CL, GC) | con `--todos --escribir`: los demás contratos, uno por archivo; `niveles.json` es el del mercado principal |
 
 kemet-plan lee `niveles.json` si es de hoy y de su mercado; kemet-entrada usa el mismo balance inicial.
